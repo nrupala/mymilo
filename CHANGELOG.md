@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 — 2026-10-06
+- Phone UX: "Sign out" link in the header (Cloudflare Access logout),
+  and a voice-dictation button in the chat composer (Web Speech API;
+  hidden automatically where the browser lacks it)
+
 ## 0.6.1 — 2026-10-06
 - Cloudflare Access UX: when the Access session is missing/expired, API
   calls receive the login page (HTML) instead of JSON — the frontend now

@@ -49,3 +49,12 @@ def test_access_login_detected_plainly(client):
     html = r.text
     assert "cloudflareaccess.com" in html
     assert "Sign-in required" in html
+
+
+def test_signout_and_voice_ui_present(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    html = r.text
+    assert 'href="/cdn-cgi/access/logout"' in html  # sign out via Access
+    assert 'id="mic"' in html  # voice dictation button
+    assert "webkitSpeechRecognition" in html

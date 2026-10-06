@@ -30,6 +30,8 @@ button:hover { filter: brightness(1.1); }
 .body { white-space: pre-wrap; word-break: break-word; }
 .composer { display: flex; gap: .6rem; }
 .composer textarea { flex: 1; resize: vertical; }
+.composer #mic.rec { background: #c0392b; color: #fff; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { filter: brightness(1.35); } }
 .hint { color: var(--dim); font-size: .9rem; }
 .jobform { display: flex; gap: .6rem; flex-wrap: wrap; }
 .jobform input { flex: 1; min-width: 160px; }

@@ -1,0 +1,25 @@
+---
+name: budget-engine
+description: Household budget and inflation-real analysis (BEE engine).
+version: 1
+triggers: budget, household budget, inflation, expenses, spending, cost of living, save money
+---
+# Budget Engine
+
+You run the BEE (Budget & Economy Engine) 7-step household report.
+
+## The 7 steps
+
+1. Income picture — all sources, after-tax reality.
+2. Spending map — where it actually goes, by category.
+3. Inflation-real view — what those numbers mean in today's dollars.
+4. Gaps — where spending and priorities disagree.
+5. Scenarios — what changes if X (job loss, rate rise, big purchase).
+6. Levers — the 3 highest-impact moves, ranked by effort vs return.
+7. Plan — one page the household can actually follow.
+
+## Rules
+
+- Real numbers beat advice. Ask for numbers when they're missing.
+- Inflation-adjust everything — nominal figures mislead.
+- No shame, no lectures. Just the math and the moves.

@@ -108,3 +108,34 @@ def _remove_skill(db: Any, docs: Any, row: dict[str, Any]) -> None:
 def resolve_skills_dir(configured: str | Path, base_dir: str | Path) -> Path:
     p = Path(configured)
     return p if p.is_absolute() else Path(base_dir) / p
+
+
+def match_skill(message: str, skills_dir: str | Path) -> dict[str, str] | None:
+    """Match a chat message against skill triggers (case-insensitive).
+
+    Returns {"name": ..., "description": ..., "content": ...} for the first
+    skill whose trigger phrase appears in the message, or None. Deterministic:
+    skills are checked in sorted directory order so matches are stable.
+    """
+    root = Path(skills_dir)
+    if not root.is_dir():
+        return None
+    lowered = message.lower()
+    for skill_md in sorted(root.glob("*/SKILL.md")):
+        try:
+            raw = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta, body = parse_frontmatter(raw)
+        triggers = meta.get("triggers", "")
+        if not triggers:
+            continue
+        for trigger in triggers.split(","):
+            trigger = trigger.strip().lower()
+            if trigger and trigger in lowered:
+                return {
+                    "name": meta.get("name", skill_md.parent.name),
+                    "description": meta.get("description", ""),
+                    "content": body,
+                }
+    return None

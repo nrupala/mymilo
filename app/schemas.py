@@ -37,6 +37,7 @@ class JobUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     cron: str | None = None
     status: str | None = None
+    payload: dict | None = None
 
 
 class Job(BaseModel):
@@ -49,6 +50,39 @@ class Job(BaseModel):
     next_run_at: str | None
     created_at: str
     updated_at: str
+
+
+class JobRun(BaseModel):
+    id: int
+    job_id: str
+    triggered_by: str
+    status: str
+    started_at: str
+    finished_at: str | None
+    result_summary: str | None
+    error: str | None
+
+
+class Suggestion(BaseModel):
+    id: int
+    kind: str
+    title: str
+    body: str
+    job_run_id: int | None
+    created_at: str
+    dismissed_at: str | None
+
+
+class ConsentGrant(BaseModel):
+    action: str = Field(min_length=1)
+
+
+class ActionInfo(BaseModel):
+    name: str
+    risk: str
+    requires_confirm: bool
+    description: str
+    consent_granted: bool
 
 
 class ModelInfo(BaseModel):

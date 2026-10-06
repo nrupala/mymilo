@@ -8,7 +8,7 @@
    │                 ModelRouter ──► llama.cpp :8080/v1 (default route "local")
    │                        │       (Phase 5: OS endpoint; router migrates up)
    │                        ▼
-   │                 SQLite (jobs table — definitions only, Phase 1)
+   │                 SQLite (jobs, runs, suggestions, consents)
    │
    └──GET /jobs──────► Jinja2 jobs UI ──fetch──► /v1/jobs CRUD
 ```
@@ -21,9 +21,14 @@
 | `app/config.py` | TOML + env-var settings; model routes; secret *names* only |
 | `app/router.py` | Model name → OpenAI-compatible upstream; timeouts; honest errors |
 | `app/schemas.py` | Pydantic v2 request/response models (OpenAI-compatible chat) |
-| `app/db.py` | stdlib sqlite3, WAL mode, schema migrations, jobs table |
-| `app/jobs.py` | Job CRUD service (no execution — Phase 3) |
-| `templates/` | `base.html`, `index.html` (chat), `jobs.html` (definitions) |
+| `app/db.py` | stdlib sqlite3, WAL mode, schema migrations (v3: jobs, documents, chunks, job_runs, suggestions, consents) |
+| `app/jobs.py` | Job CRUD + scheduling bookkeeping: payload/cron validation, `next_run_at` computation |
+| `app/cron.py` | Dependency-free 5-field cron parser/matcher (Vixie semantics) |
+| `app/events.py` | In-process event bus (sync + async emission) |
+| `app/actions.py` | Consent-gated action registry (name/risk/requires_confirm) |
+| `app/planner.py` | Deterministic planner: event → rule table → actions; suggestion recorder |
+| `app/scheduler.py` | Tick loop, due-job scan, `job.execute` (briefing/reminder) |
+| `templates/` | `base.html`, `index.html` (chat), `jobs.html` (routines + runs + suggestions), `documents.html` |
 | `static/style.css` | Local stylesheet; zero external dependencies |
 | `config/` | `mymilo.example.toml` — copy to `mymilo.toml`, never commit secrets |
 | `vault/` | Git-ignored secrets dir; env vars preferred |
@@ -41,15 +46,19 @@ with backend status preserved.
 **Health:** `GET /health` → `{status, version, backends: {name: bool}}` via
 best-effort `GET {base_url}/models` (2s timeout, never raises).
 
-**Jobs:** CRUD at `/v1/jobs`; `PATCH` for name/cron/status; `DELETE` → 204.
-`JobNotFoundError` → 404.
+**Jobs:** CRUD at `/v1/jobs`; `PATCH` for name/cron/status/payload.
+`POST /v1/jobs/{id}/trigger` runs a job now (manual); `GET /v1/jobs/{id}/runs`
+lists run history. `JobNotFoundError` → 404; bad payload/cron → 422.
 
 ## Data model
 
 `jobs(id, name, cron, payload_json, status, last_run_at, next_run_at,
-created_at, updated_at)` + `schema_migrations(version, applied_at)`.
-Statuses today: `pending` (default). `running`/`done`/`failed` are reserved
-for the Phase 3 executor.
+created_at, updated_at)`. Statuses: `pending` (default, scheduled),
+`paused` (skipped by the tick). `job_runs(id, job_id, triggered_by,
+status, started_at, finished_at, result_summary, error)` records every
+execution. `suggestions(id, kind, title, body, job_run_id, created_at,
+dismissed_at)` is the planner's outbox. `consents(id, action_name,
+granted_at, granted_by, revoked_at)` remembers confirm-once decisions.
 
 `documents(id, filename, filetype, title, tags, size_bytes, chunk_count,
 embed_backend, uploaded_at)` + `chunks(id, doc_id, chunk_index, content,
@@ -78,10 +87,33 @@ over real HTTP (see CONTRIBUTING).
 
 - `ModelRouter` → migrates into the OS layer (Phase 5); add cost hooks here
   in Phase 4 without changing the route interface.
-- `jobs` table → Phase 3 scheduler reads `cron`/`next_run_at`; add an
-  executor column family then, not now.
+- `ActionRegistry` → Phase 5 registers `shell.exec`, `browser.*` as
+  `high`-risk actions; the consent policy already governs them.
+- Event bus taxonomy → Phase 5 generalizes (`EMAIL_RECEIVED`,
+  `CALENDAR_APPROACHING`, `MARKET_TRIGGER`, …); rules stay data.
 - `POST /v1/chat/completions` → Phase 2 retrieval injects context before
   routing; the endpoint signature does not change.
+
+## Proactive engine (Phase 3)
+
+```
+tick (every tick_seconds) ──► get_due_jobs ──► bus.emit(JOB_DUE)
+    ──► planner rule "run-due-job" ──► actions.execute("job.execute")
+        ──► briefing: docs.search ──► build_rag_messages ──► router
+                ──► job_runs(completed) ──► bus.emit(JOB_COMPLETED)
+        ──► reminder: text ──► job_runs(completed) ──► bus.emit(JOB_COMPLETED)
+    ──► planner rule "<type>-to-suggestion" ──► actions.execute("suggestion.create")
+        ──► suggestions row (read/dismiss in the Routines UI)
+
+POST /v1/documents ──► bus.emit(DOCUMENT_ADDED)
+    ──► planner rule "document-added-note" ──► suggestion ("note")
+```
+
+Design rules: the LLM drafts text inside the briefing handler but never
+decides — events, rules, and the consent registry are plain code. Cron is
+parsed by `app/cron.py` (no croniter dependency). All scheduler times are
+naive-UTC ISO strings. The background loop must never die: tick exceptions
+are swallowed per-pass (runs still record failures individually).
 
 ## Retrieval (Phase 2)
 

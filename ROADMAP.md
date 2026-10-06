@@ -14,21 +14,23 @@ with citation-integrity verification, evals (hit-rate + citation checks).
 **Exit:** evals pass — 6/6 fixture questions rank the right document first;
 citation verifier catches hallucinated citations.
 
-## Phase 3 — Proactive engine (maven transfers #1, #2, #4)
-Scheduler executes jobs (`cron`/`next_run_at` come alive) over a typed
-user-editable config: cron + reminders + context polling + proactive
-suggestions — maven's scheduler/automation design, re-homed to the box.
+## Phase 3 — Proactive engine (shipped, v0.3.0, maven transfers #1, #2, #4)
+Scheduler executes jobs (`cron`/`next_run_at` come alive) over typed
+payloads: `briefing` (RAG digest drafted by the model) and `reminder`
+(plain nudge) — maven's scheduler/automation design, re-homed to the box.
 The daily-digest pattern becomes the morning/evening briefing routine.
-**Deterministic planner** (maven transfer #1 — reimplement the pattern,
-never port the Node code): event-driven rules; the LLM is the reasoner,
-never the decision-maker; policy allow/confirm with confirm-once remembered
-consent; SUGGESTION events surfaced to chat. Maven's ~20-event catalog seeds
-the OS event-bus taxonomy, generalized off Android (JOB_DUE,
-EMAIL_RECEIVED, CALENDAR_APPROACHING, MARKET_TRIGGER…).
-**Consent-gated action registry** (transfer #2): every tool declares
-name/parameters/risk-level/permissions/confirmation-requirement — the policy
-model for kernel tool endpoints (`shell.exec`, `browser.*`).
-**Exit:** a routine (e.g. morning briefing) runs end-to-end on schedule.
+**Deterministic planner** (maven transfer #1 — reimplemented, never ported):
+event bus + rule table; the LLM is the reasoner, never the decision-maker;
+JOB_COMPLETED briefings/reminders and DOCUMENT_ADDED notes surface as
+`suggestions`. **Consent-gated action registry** (transfer #2): every action
+declares name/risk/requires_confirm; confirm-once consent remembered in the
+`consents` table — the policy model for Phase 5's `shell.exec`/`browser.*`.
+New endpoints: `POST /v1/jobs/{id}/trigger`, `GET /v1/jobs/{id}/runs`,
+`GET /v1/suggestions`, `POST /v1/suggestions/{id}/dismiss`, `GET /v1/actions`,
+`POST /v1/consents`, `DELETE /v1/consents/{action}`; `/jobs` page rebuilt as
+Routines (schedule, run-now, pause/resume, runs, suggestions).
+**Exit:** a briefing ran end-to-end on the scheduler tick over real HTTP —
+verified live 2026-10-06.
 
 ## Phase 4 — Fleet economics (maven transfer #6)
 Cost-aware routing (local-first, free-tier preference), per-call ledger,

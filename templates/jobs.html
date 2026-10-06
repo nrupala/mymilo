@@ -1,25 +1,48 @@
 {% extends "base.html" %}
-{% block title %}MyMilo — Jobs{% endblock %}
+{% block title %}MyMilo — Routines{% endblock %}
 {% block content %}
 <div class="jobs-wrap">
-  <h2>Job definitions</h2>
-  <p class="hint">Phase 1 stores definitions only — execution arrives with the
-  Phase 3 proactive engine. No job runs from this page.</p>
+  <h2>Routines</h2>
+  <p class="hint">The proactive engine runs these on schedule. A job's
+  <em>type</em> lives in its payload: <code>{"type":"briefing", …}</code>
+  drafts a digest from your documents, <code>{"type":"reminder","text":"…","…}</code>
+  files a nudge. Decisions are made by the deterministic planner, never the model.</p>
+
+  <h3>New routine</h3>
   <form id="newjob" class="jobform">
-    <input id="jname" placeholder="Job name, e.g. morning-briefing" required maxlength="200">
+    <input id="jname" placeholder="Name, e.g. morning-briefing" required maxlength="200">
     <input id="jcron" placeholder="cron, e.g. 0 7 * * * (optional)">
-    <input id="jpayload" placeholder='payload JSON, e.g. {"to":"me"}'>
-    <button type="submit">Add job</button>
+    <select id="jtype">
+      <option value="briefing">briefing</option>
+      <option value="reminder">reminder</option>
+    </select>
+    <input id="jpayload" placeholder='extra JSON, e.g. {"query":"project atlas","text":"water the plants"}'>
+    <button type="submit">Add routine</button>
   </form>
+
+  <h3>Scheduled</h3>
   <table id="jobtable">
-    <thead><tr><th>ID</th><th>Name</th><th>Cron</th><th>Status</th><th></th></tr></thead>
-    <tbody><tr><td colspan="5">loading…</td></tr></tbody>
+    <thead><tr><th>Name</th><th>Cron</th><th>Next run (UTC)</th><th>Last run</th><th>Status</th><th></th></tr></thead>
+    <tbody><tr><td colspan="6">loading…</td></tr></tbody>
   </table>
+
+  <h3>Recent runs</h3>
+  <table id="runtable">
+    <thead><tr><th>Job</th><th>Triggered</th><th>Status</th><th>Summary</th></tr></thead>
+    <tbody><tr><td colspan="4">select “Runs” on a routine…</td></tr></tbody>
+  </table>
+
+  <h3>Suggestions</h3>
+  <p class="hint">What the planner surfaced — briefings, reminders, notes.
+  Dismiss what you've handled.</p>
+  <div id="suggestions"><p>loading…</p></div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
 const tbody = document.querySelector('#jobtable tbody');
+const runTbody = document.querySelector('#runtable tbody');
+const suggDiv = document.getElementById('suggestions');
 
 async function loadJobs() {
   const r = await fetch('/v1/jobs');
@@ -27,30 +50,87 @@ async function loadJobs() {
   tbody.innerHTML = '';
   (j.jobs || []).forEach(job => {
     const tr = document.createElement('tr');
-    [job.id, job.name, job.cron || '—', job.status].forEach(v => {
+    [job.name, job.cron || '—', job.next_run_at || '—',
+     job.last_run_at || '—', job.status].forEach(v => {
       const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
     });
     const td = document.createElement('td');
-    const b = document.createElement('button');
-    b.textContent = 'Delete';
-    b.addEventListener('click', async () => {
+    const mk = (label, fn) => {
+      const b = document.createElement('button'); b.textContent = label;
+      b.addEventListener('click', fn); td.appendChild(b); return b;
+    };
+    mk('Run now', async () => {
+      const r = await fetch('/v1/jobs/' + job.id + '/trigger', {method: 'POST'});
+      if (!r.ok) alert('run failed: ' + r.status);
+      loadJobs(); loadRuns(job); loadSuggestions();
+    });
+    mk('Runs', () => loadRuns(job));
+    mk(job.status === 'paused' ? 'Resume' : 'Pause', async () => {
+      await fetch('/v1/jobs/' + job.id, {method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: job.status === 'paused' ? 'pending' : 'paused'})});
+      loadJobs();
+    });
+    mk('Delete', async () => {
       await fetch('/v1/jobs/' + job.id, {method: 'DELETE'});
       loadJobs();
     });
-    td.appendChild(b); tr.appendChild(td);
+    tr.appendChild(td);
     tbody.appendChild(tr);
   });
   if (!(j.jobs || []).length) {
-    tbody.innerHTML = '<tr><td colspan="5">no jobs yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">no routines yet</td></tr>';
   }
 }
-loadJobs();
+
+async function loadRuns(job) {
+  const r = await fetch('/v1/jobs/' + job.id + '/runs');
+  const j = await r.json();
+  runTbody.innerHTML = '';
+  (j.runs || []).forEach(run => {
+    const tr = document.createElement('tr');
+    [job.name, run.triggered_by, run.status,
+     (run.result_summary || run.error || '').slice(0, 160)].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    runTbody.appendChild(tr);
+  });
+  if (!(j.runs || []).length) {
+    runTbody.innerHTML = '<tr><td colspan="4">no runs yet</td></tr>';
+  }
+}
+
+async function loadSuggestions() {
+  const r = await fetch('/v1/suggestions');
+  const j = await r.json();
+  suggDiv.innerHTML = '';
+  (j.suggestions || []).forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'suggestion';
+    const h = document.createElement('strong');
+    h.textContent = '[' + s.kind + '] ' + s.title;
+    const p = document.createElement('p');
+    p.textContent = s.body.slice(0, 600);
+    const b = document.createElement('button');
+    b.textContent = 'Dismiss';
+    b.addEventListener('click', async () => {
+      await fetch('/v1/suggestions/' + s.id + '/dismiss', {method: 'POST'});
+      loadSuggestions();
+    });
+    d.append(h, p, b);
+    suggDiv.appendChild(d);
+  });
+  if (!(j.suggestions || []).length) {
+    suggDiv.innerHTML = '<p>nothing surfaced yet</p>';
+  }
+}
 
 document.getElementById('newjob').addEventListener('submit', async (e) => {
   e.preventDefault();
-  let payload = {};
+  let extra = {};
   const raw = document.getElementById('jpayload').value.trim();
-  if (raw) { try { payload = JSON.parse(raw); } catch { alert('payload is not valid JSON'); return; } }
+  if (raw) { try { extra = JSON.parse(raw); } catch { alert('extra JSON is not valid'); return; } }
+  const payload = Object.assign({type: document.getElementById('jtype').value}, extra);
   const r = await fetch('/v1/jobs', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -60,9 +140,16 @@ document.getElementById('newjob').addEventListener('submit', async (e) => {
       payload,
     }),
   });
-  if (!r.ok) { alert('failed: ' + r.status); return; }
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    alert('failed: ' + (err.error ? err.error.message : r.status));
+    return;
+  }
   e.target.reset();
   loadJobs();
 });
+
+loadJobs();
+loadSuggestions();
 </script>
 {% endblock %}

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-10-06
+Phase 6 — PWA installability (phone as the surface):
+- Installable web app: `/manifest.json` (standalone display, teal theme,
+  192/512 + maskable icons), `/sw.js` service worker (app-shell caching;
+  API calls always hit the network, never served stale), `theme-color` /
+  `apple-touch-icon` / manifest link in the base template
+- 70 tests green (1 new: PWA routes + manifest validity); live
+  behavior-verified over HTTP
+
 ## 0.5.0 — 2026-10-06
 Phase 5 — OS platform layer (maven transfers #5, #7, #8):
 - OS-client seam: `[os] endpoint` registers an `os` route and makes it the

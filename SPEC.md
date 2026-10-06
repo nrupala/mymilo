@@ -36,11 +36,12 @@ days. A town with no routines is a search box. MyMilo is built resident-first:
 
 ## 3. Boundaries
 
-- **KalaBodha** is the sovereign assistant product built around the
-  zero-knowledge vault core. MyMilo is the resident buddy of the agentic OS.
-  Overlap risk is real and must be converged explicitly before Phase 2 —
-  one of them owns the "assistant" surface, or their split is drawn in this
-  document. Not pretended-settled.
+- **KalaBodha** — CONVERGED 2026-10-06: MyMilo is the resident buddy
+  (routines, chat, proactive intelligence); KalaBodha is the vault it keeps
+  secrets in. (Evidence: maven-assistant's scope was "resident personal
+  intelligence" — MyMilo's scope — while KalaBodha's shipped reality is the
+  zero-knowledge vault. Maven tried to be both assistant and vault-host on
+  one phone, and the substrate killed it.)
 - **Milo (Town)** is the register reference: the buddy tone, the proactive
   posture. MyMilo replicates Town's *free* behaviors natively (routines,
   memory synthesis, connectors) — never its credit-burners. Wright keeps the

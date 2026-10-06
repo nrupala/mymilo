@@ -24,7 +24,12 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -194,6 +199,21 @@ def create_app(
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # PWA entry points: served from root so the service worker's scope is "/".
+    @app.get("/manifest.json", include_in_schema=False)
+    async def _manifest():
+        return FileResponse(
+            STATIC_DIR / "manifest.json", media_type="application/manifest+json"
+        )
+
+    @app.get("/sw.js", include_in_schema=False)
+    async def _service_worker():
+        return FileResponse(
+            STATIC_DIR / "sw.js",
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+        )
 
     @app.exception_handler(ModelNotFoundError)
     async def _model_not_found(_: Request, exc: ModelNotFoundError):

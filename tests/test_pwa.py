@@ -53,6 +53,9 @@ def test_access_login_detected_plainly(client):
     html = r.text
     assert "cloudflareaccess.com" in html
     assert "Sign-in required" in html
+    # A backend hiccup (HTML error page, not the login page) must not be
+    # mislabeled as a sign-in problem.
+    assert "Server hiccup" in html
 
 
 def test_signout_and_voice_ui_present(client):

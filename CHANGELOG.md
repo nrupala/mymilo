@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.4 — 2026-10-06
+- Honest error labeling: the Access-login detector now only fires for the
+  actual login page (redirect to cloudflareaccess.com). Other HTML error
+  pages (e.g. Cloudflare 502s when a backend hiccups) say "Server hiccup"
+  instead of being mislabeled "Sign-in required".
+- Config: box now ships `config/mymilo.toml` pointing the "local" route at
+  the Phi-4-mini backend (:7072) instead of the dead :8080 default.
+
 ## 0.6.3 — 2026-10-06
 - Service worker respects Cloudflare Access: page loads are now
   network-first so the Access login handshake (redirects + session

@@ -120,7 +120,8 @@ form.addEventListener('submit', async (e) => {
     }
   } catch (err) {
     thinking.remove();
-    addMsg('assistant', /sign-in required/i.test(err.message || '') ? err.message : 'Request failed: ' + err.message);
+    const friendly = /sign-in required|server hiccup/i.test(err.message || '');
+    addMsg('assistant', friendly ? err.message : 'Request failed: ' + err.message);
   }
 });
 

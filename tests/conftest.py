@@ -8,7 +8,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import ModelRoute, Settings
+from app.config import EmbeddingsConfig, ModelRoute, Settings
 from app.main import create_app
 
 
@@ -51,6 +51,7 @@ def settings(tmp_path):
         port=8090,
         db_path=str(tmp_path / "test.db"),
         models=[ModelRoute(name="stub", base_url="http://stub-backend/v1")],
+        embeddings=EmbeddingsConfig(backend="llamacpp", route="stub"),
     )
 
 

@@ -51,6 +51,13 @@ created_at, updated_at)` + `schema_migrations(version, applied_at)`.
 Statuses today: `pending` (default). `running`/`done`/`failed` are reserved
 for the Phase 3 executor.
 
+`documents(id, filename, filetype, title, tags, size_bytes, chunk_count,
+embed_backend, uploaded_at)` + `chunks(id, doc_id, chunk_index, content,
+embedding BLOB, embed_dim)`. Embeddings live in the same SQLite file —
+no pickle sidecars. Personal-scale design: search loads all embeddings
+into memory for numpy cosine similarity (fine for thousands of chunks);
+the scaling path is sqlite-vec / pgvector when retrieval earns it.
+
 ## Configuration & secrets
 
 Precedence: `MYMILO_CONFIG` path → `config/mymilo.toml` → built-in defaults.
@@ -75,3 +82,33 @@ over real HTTP (see CONTRIBUTING).
   executor column family then, not now.
 - `POST /v1/chat/completions` → Phase 2 retrieval injects context before
   routing; the endpoint signature does not change.
+
+## Retrieval (Phase 2)
+
+```
+POST /v1/documents (multipart) ──► ingest.py ──► chunks ──► embeddings.py ──► SQLite
+POST /v1/retrieve {query, top_k} ──► cosine search ──► ranked ChunkHits
+POST /v1/chat/completions {"rag": {"enabled": true}}
+    ──► retrieve ──► build_rag_messages ──► router ──► verify_citations
+```
+
+- `app/ingest.py` — multi-format extraction + word chunking, adapted from
+  `nrupala/localragcoder`. Optional parsers (PDF/DOCX/HTML/MD) degrade with
+  a clear install hint, never silently.
+- `app/embeddings.py` — `Embedder` protocol. Default `LlamaCppEmbedder`
+  (OpenAI-compatible `/embeddings`, zero heavy deps); optional
+  `SentenceTransformerEmbedder` (`rag` extra); `HashEmbedder` is test-only
+  and deterministic. No silent fallbacks — unavailable backends raise
+  `EmbedderUnavailableError` (→ HTTP 503) with instructions.
+- `app/documents.py` — upload lifecycle + cosine search over SQLite-stored
+  embeddings. Chunks whose `embed_dim` doesn't match the active embedder
+  are skipped with a warning (re-ingest after changing backends).
+- `app/rag.py` — context builder with `[n] (source: file, chunk i)`
+  markers, citation instruction system prompt, and `verify_citations`:
+  every citation in the answer must resolve to a retrieved chunk, or the
+  response flags it (`citation_check.ok: false`) instead of presenting it
+  as sourced.
+- Evals live in `evals/` (fixture corpus + questions) and run in
+  `tests/test_rag.py`: retrieval hit-rate (target >80%), citation
+  integrity. CI uses `HashEmbedder` (machinery, deterministic); semantic
+  quality numbers come from runs with a real embedding backend.

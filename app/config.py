@@ -23,12 +23,22 @@ class ModelRoute:
 
 
 @dataclass
+class EmbeddingsConfig:
+    backend: str = "llamacpp"  # llamacpp | sentence-transformers | hash (test only)
+    route: str = "local"  # model-route name for the llamacpp backend
+    model: str = "embed"  # model name sent to /embeddings
+    st_model: str = "all-MiniLM-L6-v2"
+    timeout_s: float = 60.0
+
+
+@dataclass
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8090
     db_path: str = "data/mymilo.db"
     models: list[ModelRoute] = field(default_factory=list)
     request_timeout_s: float = 90.0
+    embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
 
     @classmethod
     def load(cls, config_path: str | None = None) -> Settings:
@@ -49,6 +59,16 @@ class Settings:
             os.environ.get(
                 "MYMILO_TIMEOUT", server.get("request_timeout_s", s.request_timeout_s)
             )
+        )
+        emb = data.get("embeddings", {})
+        s.embeddings = EmbeddingsConfig(
+            backend=os.environ.get(
+                "MYMILO_EMBED_BACKEND", emb.get("backend", "llamacpp")
+            ),
+            route=emb.get("route", "local"),
+            model=emb.get("model", "embed"),
+            st_model=emb.get("st_model", "all-MiniLM-L6-v2"),
+            timeout_s=float(emb.get("timeout_s", 60.0)),
         )
 
         model_defs = data.get("models", [])

@@ -85,6 +85,20 @@ class ActionInfo(BaseModel):
     consent_granted: bool
 
 
+class SkillInfo(BaseModel):
+    name: str
+    description: str
+    version: str
+    path: str
+    doc_id: str
+    updated_at: str
+
+
+class PersonaInfo(BaseModel):
+    name: str
+    system_prompt: str
+
+
 class LedgerEntry(BaseModel):
     id: int
     ts: str

@@ -50,18 +50,29 @@ route ranking, recent calls.
 verified live 2026-10-06 (stub usage backend: costs, quota suggestion,
 ranking all observed over HTTP).
 
-## Phase 5 — OS platform layer (maven transfers #5, #7, #8)
-Router + ledger migrate into the agentic OS; MyMilo becomes a thin client of
-the OS's OpenAI-compatible endpoint. Persona/state engine re-derived
-neutrally. Agents as first-class users: MCP, `/.well-known`, `llms.txt`.
-**Skills convention** (transfer #5): drop-a-markdown-file, file-watch
-auto-ingest — one convention with the Skill Foundry idea, not two.
-**Vault alignment** (transfer #7): zero-trust pattern shared with
-kalabodha-vault — align, don't invent.
-**MCP tool catalog** (transfer #8): maven's 22+ tool shapes as the checklist
-when defining the kernel's MCP surface; review the list, don't port code.
-**Exit:** MyMilo runs unchanged against the OS endpoint with the local
-router deleted.
+## Phase 5 — OS platform layer (shipped, v0.5.0, maven transfers #5, #7, #8)
+**OS-client seam**: `[os] endpoint` registers a route named `os` and makes
+it the default model — one TOML change turns MyMilo into a thin client of
+the OS's OpenAI-compatible endpoint. The local router is RETAINED until the
+OS endpoint is live (deleting it now would break the product); its removal
+is a one-PR change then. **Agents as first-class users**:
+`/.well-known/mymilo.json`, `/llms.txt`, `GET /v1/mcp/tools`.
+**MCP tool catalog** (transfer #8): `mcp/catalog.json` defines the 19-tool
+surface as data — the contract the kernel's MCP server implements;
+reviewed, not ported. **Skills convention** (transfer #5): drop
+`skills/<name>/SKILL.md` (frontmatter: name/description/version) — indexed
+on startup, via `POST /v1/skills/rescan`, and every `[skills] poll_seconds`
+while the scheduler runs; indexed as `skill:<name>` documents so skills
+are retrievable. **Vault alignment** (transfer #7): `docs/vault-alignment.md`
+states the shared zero-trust pattern — env var wins, `<vault-path>/<NAME>`
+file fallback; secrets never in config, never logged.
+**Persona**: `[persona]` name/system_prompt, `GET /v1/persona`; briefings
+use it (with the `(source: file, chunk N)` citation convention, so the
+verifier checks briefings exactly like RAG chat).
+**Exit:** HONEST PARTIAL — MyMilo runs unchanged with the OS seam
+configured (verified live: `os` route registered, default, well-known
+reports `os_mode: true`); the local router is deleted only when the real
+OS endpoint exists.
 
 ## Mobile story (decided 2026-10-06)
 Maven proved phone-as-server fails: the OS kills background processes, and

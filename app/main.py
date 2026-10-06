@@ -18,12 +18,13 @@ retrieval-augmented generation with citation-integrity verification.
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -70,11 +71,14 @@ from .schemas import (
     LedgerEntry,
     ModelInfo,
     ModelList,
+    PersonaInfo,
     RetrieveRequest,
     RouteCostSummary,
     RouteInfo,
+    SkillInfo,
     Suggestion,
 )
+from .skills import resolve_skills_dir, scan_skills
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -163,9 +167,16 @@ def create_app(
     )
     _ = planner  # the rule table lives on the bus from here on
 
+    skills_dir = resolve_skills_dir(settings.skills.dir, BASE_DIR)
+    mcp_catalog_path = BASE_DIR / "mcp" / "catalog.json"
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         task = None
+        if settings.skills.enabled:
+            # Drop-a-file skills are indexed before serving.
+            await scan_skills(db, docs, skills_dir)
+            app.state.last_skill_scan = asyncio.get_event_loop().time()
         if settings.scheduler.enabled:
             task = asyncio.create_task(scheduler_loop(app))
         yield
@@ -177,6 +188,9 @@ def create_app(
     app.state.db = db
     app.state.bus = bus
     app.state.actions = actions
+    app.state.docs = docs
+    app.state.skills_dir = skills_dir
+    app.state.last_skill_scan = 0.0
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -508,6 +522,100 @@ def create_app(
             )
         out.sort(key=lambda r: r["recommended_rank"])
         return {"routes": out}
+
+    # ── Phase 5: OS platform layer ───────────────────────────
+
+    @app.get("/v1/skills")
+    async def list_skills():
+        return {"skills": [SkillInfo(**s).model_dump() for s in db.list_skill_files()]}
+
+    @app.post("/v1/skills/rescan")
+    async def rescan_skills():
+        return await scan_skills(db, docs, skills_dir)
+
+    @app.get("/v1/persona")
+    async def get_persona():
+        return PersonaInfo(
+            name=settings.persona.name,
+            system_prompt=settings.persona.system_prompt,
+        ).model_dump()
+
+    @app.get("/v1/mcp/tools")
+    async def mcp_tools():
+        """The MCP tool surface as data (maven transfer #8, reviewed).
+
+        This is the contract the kernel's MCP server implements — the
+        shapes, not a running server. Each tool maps to an HTTP endpoint.
+        """
+        try:
+            return json.loads(mcp_catalog_path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=503, detail="MCP catalog unavailable"
+            ) from exc
+
+    @app.get("/.well-known/mymilo.json")
+    async def well_known():
+        """Machine-readable instance description for agents."""
+        return {
+            "name": "MyMilo",
+            "description": (
+                "The native town-like buddy — resident interface of "
+                "Nrupal's personal agentic OS."
+            ),
+            "version": __version__,
+            "persona": settings.persona.name,
+            "openai_compatible": ["/v1/chat/completions", "/v1/models"],
+            "retrieval": ["/v1/documents", "/v1/retrieve"],
+            "routines": ["/v1/jobs", "/v1/suggestions", "/v1/actions"],
+            "economics": ["/v1/ledger", "/v1/routes"],
+            "platform": [
+                "/v1/skills",
+                "/v1/persona",
+                "/v1/mcp/tools",
+                "/llms.txt",
+            ],
+            "os_mode": settings.os.endpoint is not None,
+        }
+
+    @app.get("/llms.txt", response_class=PlainTextResponse)
+    async def llms_txt():
+        """Plain-language API summary so agents are first-class users."""
+        return f"""# MyMilo
+
+MyMilo is the native town-like buddy — the resident interface of a personal
+agentic OS. Version {__version__}.
+
+## Use me
+
+- Chat (OpenAI-compatible): POST /v1/chat/completions
+  {{"model": "<name>", "messages": [{{"role": "user", "content": "..."}}],
+   "rag": {{"enabled": true, "top_k": 5}}}}
+  With rag enabled the answer cites sources as [S1], [S2], ... and returns
+  rag_sources plus a citation_check.
+- Models: GET /v1/models
+- Retrieval: POST /v1/retrieve {{"query": "...", "top_k": 5}}
+- Documents: POST /v1/documents (multipart file), GET /v1/documents,
+  DELETE /v1/documents/{{id}}
+- Routines (cron jobs): GET/POST /v1/jobs, POST /v1/jobs/{{id}}/trigger,
+  GET /v1/jobs/{{id}}/runs. Payload types: briefing {{query, top_k, model}}
+  and reminder {{text}}.
+- Planner outbox: GET /v1/suggestions, POST /v1/suggestions/{{id}}/dismiss
+- Actions & consent: GET /v1/actions, POST /v1/consents, DELETE /v1/consents/{{action}}
+- Economics: GET /v1/ledger/summary, GET /v1/routes (cheapest-first ranking)
+- Skills (drop-a-file): GET /v1/skills, POST /v1/skills/rescan
+- Persona: GET /v1/persona
+- Machine surfaces: GET /.well-known/mymilo.json, GET /v1/mcp/tools
+
+## Rules of the house
+
+- Decisions are made by a deterministic planner (events + rules), never by
+  the model. The model drafts text; the planner decides.
+- Every action declares name/risk/confirmation requirement; medium/high-risk
+  actions need recorded consent.
+- Routing is exact-name: nothing silently fails over to a paid route.
+- Missing token usage is recorded as unknown, never estimated.
+"""
 
     # ── HTML ─────────────────────────────────────────────────
 

@@ -32,21 +32,13 @@ from typing import Any
 
 from . import cron as cron_mod
 from .rag import build_rag_messages, verify_citations
+from .skills import scan_skills
 
 JOB_TYPES = ("briefing", "reminder")
 
 
 class JobDefinitionError(ValueError):
     """Raised when a job payload or cron expression is invalid."""
-
-
-BRIEFING_SYSTEM_PROMPT = (
-    "You are MyMilo, Nrupal's proactive briefing assistant. "
-    "Write a concise briefing from the retrieved context below. "
-    "Lead with what needs attention, keep it scannable, and never "
-    "invent facts that are not in the context. If the context is thin, "
-    "say so plainly."
-)
 
 
 # ----------------------------------------------------------------------
@@ -181,7 +173,7 @@ async def _run_briefing(
 ) -> str:
     query = payload.get("query", "recent documents")
     top_k = int(payload.get("top_k", 5))
-    model = payload.get("model") or deps["settings"].models[0].name
+    model = payload.get("model") or deps["settings"].default_model
 
     retrieved = await deps["docs"].search(query, top_k=top_k)
     if not retrieved:
@@ -190,16 +182,24 @@ async def _run_briefing(
             f"{query!r} — nothing to summarize."
         )
 
+    # Persona prompt leads; the citation convention matches the verifier
+    # in app/rag.py ((source: file, chunk N)) so briefings are checked
+    # exactly like RAG chat answers.
+    template = (
+        deps["settings"].persona.system_prompt
+        + "\n\nCite every factual claim with the document filename and chunk "
+        "index in parentheses, exactly like: (source: report.pdf, chunk 3). "
+        "Use only the sources listed below.\n\nContext:\n{context}\n"
+    )
     messages = build_rag_messages(
         [
-            {"role": "system", "content": BRIEFING_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": f"Briefing topic: {job['name']}\n\n"
-                "Write the briefing. Cite sources as [S1], [S2], ...",
+                "content": f"Briefing topic: {job['name']}\n\nWrite the briefing.",
             },
         ],
         retrieved,
+        template=template,
     )
     data = await deps["router"].chat_completion(model, {"messages": messages})
     answer = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
@@ -239,11 +239,23 @@ async def tick(app: Any) -> int:
 
 async def scheduler_loop(app: Any) -> None:
     """Background task: tick every ``tick_seconds`` until cancelled."""
+    import time as _time
+
     interval = app.state.settings.scheduler.tick_seconds
     while True:
         await asyncio.sleep(interval)
         try:
             await tick(app)
+            # Periodic drop-a-file skill rescan (Phase 5); cheap mtime
+            # polling, no watchdog dependency.
+            skills_cfg = app.state.settings.skills
+            if skills_cfg.enabled:
+                now = _time.monotonic()
+                if now - app.state.last_skill_scan >= skills_cfg.poll_seconds:
+                    await scan_skills(
+                        app.state.db, app.state.docs, app.state.skills_dir
+                    )
+                    app.state.last_skill_scan = now
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 — the loop must never die

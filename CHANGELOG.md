@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — 2026-10-06
+- Cloudflare Access UX: when the Access session is missing/expired, API
+  calls receive the login page (HTML) instead of JSON — the frontend now
+  detects this and says "Sign-in required" plainly instead of
+  `Unexpected token '<'`. Health indicator, chat, and model picker all
+  surface it.
+
 ## 0.6.0 — 2026-10-06
 Phase 6 — PWA installability (phone as the surface):
 - Installable web app: `/manifest.json` (standalone display, teal theme,

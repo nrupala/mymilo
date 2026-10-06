@@ -39,3 +39,13 @@ def test_base_template_links_pwa(client):
     assert 'rel="manifest" href="/manifest.json"' in html
     assert 'name="theme-color"' in html
     assert "serviceWorker" in html
+
+
+def test_access_login_detected_plainly(client):
+    # Cloudflare Access login HTML on an API call must surface as a clear
+    # sign-in message, never a JSON parse error.
+    r = client.get("/")
+    assert r.status_code == 200
+    html = r.text
+    assert "cloudflareaccess.com" in html
+    assert "Sign-in required" in html

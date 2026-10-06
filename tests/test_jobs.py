@@ -1,22 +1,27 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (c) 2026 Nrupal Akolkar
-"""Jobs CRUD: definitions only — execution is Phase 3."""
+"""Jobs CRUD: typed payloads (Phase 3) — execution is tested in test_scheduler.py."""
 
 
 def test_job_crud_roundtrip(client):
     created = client.post(
         "/v1/jobs",
-        json={"name": "morning-briefing", "cron": "0 7 * * *", "payload": {"a": 1}},
+        json={
+            "name": "morning-briefing",
+            "cron": "0 7 * * *",
+            "payload": {"type": "briefing", "query": "project atlas"},
+        },
     )
     assert created.status_code == 201
     job = created.json()
     assert job["name"] == "morning-briefing"
     assert job["status"] == "pending"
+    assert job["next_run_at"] is not None  # cron -> next run computed
     job_id = job["id"]
 
     got = client.get(f"/v1/jobs/{job_id}")
     assert got.status_code == 200
-    assert got.json()["payload"] == {"a": 1}
+    assert got.json()["payload"]["type"] == "briefing"
 
     listed = client.get("/v1/jobs").json()["jobs"]
     assert any(j["id"] == job_id for j in listed)

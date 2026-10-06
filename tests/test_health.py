@@ -36,4 +36,4 @@ def test_index_page_renders(client):
 def test_jobs_page_renders(client):
     r = client.get("/jobs")
     assert r.status_code == 200
-    assert "Job definitions" in r.text
+    assert "Routines" in r.text

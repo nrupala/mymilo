@@ -17,6 +17,8 @@ retrieval-augmented generation with citation-integrity verification.
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -26,7 +28,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import __version__
+from .actions import ActionRegistry, ConsentRequired
 from .config import Settings
+from .cron import CronError
 from .db import Database
 from .documents import DocumentNotFoundError, DocumentService
 from .embeddings import (
@@ -35,8 +39,10 @@ from .embeddings import (
     LlamaCppEmbedder,
     SentenceTransformerEmbedder,
 )
+from .events import EventBus
 from .ingest import IngestionError
 from .jobs import JobNotFoundError, JobService
+from .planner import Planner, create_suggestion
 from .rag import build_rag_messages, rag_sources, verify_citations
 from .router import (
     ModelNotFoundError,
@@ -44,16 +50,26 @@ from .router import (
     UpstreamError,
     UpstreamUnavailableError,
 )
+from .scheduler import (
+    JobDefinitionError,
+    make_job_executor,
+    run_job_now,
+    scheduler_loop,
+)
 from .schemas import (
+    ActionInfo,
     ChatCompletionRequest,
     ChunkHit,
+    ConsentGrant,
     Document,
     DocumentUploadResponse,
     JobCreate,
+    JobRun,
     JobUpdate,
     ModelInfo,
     ModelList,
     RetrieveRequest,
+    Suggestion,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -98,7 +114,46 @@ def create_app(
     jobs = JobService(db)
     docs = DocumentService(db, embedder or build_embedder(settings, transport))
 
-    app = FastAPI(title="MyMilo", version=__version__)
+    # ── Phase 3: proactive engine ──────────────────────────────
+    # Event bus -> deterministic planner -> consent-gated actions.
+    # The LLM never decides; it only drafts text inside job handlers.
+    bus = EventBus()
+    actions = ActionRegistry()
+    planner = Planner(bus, actions)
+    executor_deps = {
+        "settings": settings,
+        "docs": docs,
+        "router": router,
+        "bus": bus,
+    }
+    actions.register(
+        "job.execute",
+        make_job_executor(executor_deps),
+        risk="low",
+        description="Execute a job definition (briefing or reminder).",
+    )
+    actions.register(
+        "suggestion.create",
+        create_suggestion,
+        risk="low",
+        description="Record a suggestion for the user to read or dismiss.",
+    )
+    _ = planner  # the rule table lives on the bus from here on
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        task = None
+        if settings.scheduler.enabled:
+            task = asyncio.create_task(scheduler_loop(app))
+        yield
+        if task is not None:
+            task.cancel()
+
+    app = FastAPI(title="MyMilo", version=__version__, lifespan=lifespan)
+    app.state.settings = settings
+    app.state.db = db
+    app.state.bus = bus
+    app.state.actions = actions
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -172,6 +227,34 @@ def create_app(
             content={"error": {"message": str(exc), "type": "ingestion_error"}},
         )
 
+    @app.exception_handler(CronError)
+    async def _cron_error(_: Request, exc: CronError):
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"message": str(exc), "type": "invalid_cron"}},
+        )
+
+    @app.exception_handler(JobDefinitionError)
+    async def _job_definition_error(_: Request, exc: JobDefinitionError):
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"message": str(exc), "type": "invalid_job"}},
+        )
+
+    @app.exception_handler(ConsentRequired)
+    async def _consent_required(_: Request, exc: ConsentRequired):
+        return JSONResponse(
+            status_code=403,
+            content={"error": {"message": str(exc), "type": "consent_required"}},
+        )
+
+    @app.exception_handler(KeyError)
+    async def _unknown_action(_: Request, exc: KeyError):
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"message": str(exc), "type": "unknown_action"}},
+        )
+
     @app.get("/health")
     async def health():
         backends = {}
@@ -238,6 +321,15 @@ def create_app(
         result = await docs.upload(
             raw, file.filename or "upload", title=title, tags=tags
         )
+        await bus.emit_async(
+            "DOCUMENT_ADDED",
+            {
+                "db": db,
+                "doc_id": result["doc_id"],
+                "filename": result["filename"],
+                "chunks": result["chunk_count"],
+            },
+        )
         return result
 
     @app.get("/v1/documents")
@@ -275,6 +367,58 @@ def create_app(
     @app.delete("/v1/jobs/{job_id}", status_code=204)
     async def delete_job(job_id: str):
         jobs.delete(job_id)
+        return None
+
+    # ── Phase 3: proactive engine ──────────────────────────────
+
+    @app.post("/v1/jobs/{job_id}/trigger")
+    async def trigger_job(job_id: str):
+        jobs.get(job_id)  # 404 if unknown
+        return await run_job_now(app, job_id, triggered_by="manual")
+
+    @app.get("/v1/jobs/{job_id}/runs")
+    async def list_job_runs(job_id: str):
+        jobs.get(job_id)  # 404 if unknown
+        return {"runs": [JobRun(**r).model_dump() for r in db.list_runs(job_id)]}
+
+    @app.get("/v1/suggestions")
+    async def list_suggestions():
+        return {
+            "suggestions": [Suggestion(**s).model_dump() for s in db.list_suggestions()]
+        }
+
+    @app.post("/v1/suggestions/{suggestion_id}/dismiss")
+    async def dismiss_suggestion(suggestion_id: int):
+        if not db.dismiss_suggestion(suggestion_id):
+            raise HTTPException(
+                status_code=404, detail="unknown or already-dismissed suggestion"
+            )
+        return {"dismissed": suggestion_id}
+
+    @app.get("/v1/actions")
+    async def list_actions():
+        return {
+            "actions": [
+                ActionInfo(
+                    name=a.name,
+                    risk=a.risk,
+                    requires_confirm=a.requires_confirm,
+                    description=a.description,
+                    consent_granted=db.consent_granted(a.name),
+                ).model_dump()
+                for a in actions.list()
+            ]
+        }
+
+    @app.post("/v1/consents", status_code=201)
+    async def grant_consent(data: ConsentGrant):
+        actions.get(data.action)  # 404 if unknown
+        return db.grant_consent(data.action)
+
+    @app.delete("/v1/consents/{action_name}", status_code=204)
+    async def revoke_consent(action_name: str):
+        actions.get(action_name)  # 404 if unknown
+        db.revoke_consent(action_name)
         return None
 
     # ── HTML ─────────────────────────────────────────────────

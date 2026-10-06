@@ -32,6 +32,12 @@ class EmbeddingsConfig:
 
 
 @dataclass
+class SchedulerConfig:
+    enabled: bool = True
+    tick_seconds: float = 30.0
+
+
+@dataclass
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8090
@@ -39,6 +45,7 @@ class Settings:
     models: list[ModelRoute] = field(default_factory=list)
     request_timeout_s: float = 90.0
     embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
+    scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
 
     @classmethod
     def load(cls, config_path: str | None = None) -> Settings:
@@ -84,6 +91,17 @@ class Settings:
                     timeout_s=float(m.get("timeout_s", 60.0)),
                 )
             )
+
+        sched = data.get("scheduler", {})
+        s.scheduler = SchedulerConfig(
+            enabled=os.environ.get(
+                "MYMILO_SCHEDULER_ENABLED", str(sched.get("enabled", True))
+            ).lower()
+            not in ("0", "false", "no"),
+            tick_seconds=float(
+                os.environ.get("MYMILO_SCHEDULER_TICK", sched.get("tick_seconds", 30.0))
+            ),
+        )
         return s
 
     def route_for(self, name: str) -> ModelRoute | None:

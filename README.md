@@ -38,11 +38,18 @@ curl localhost:8090/v1/chat/completions -H 'Content-Type: application/json' -d '
   "messages": [{"role": "user", "content": "Hello, Milo."}]
 }'
 
-# jobs: definitions only in Phase 1 — nothing executes yet
+# routines (Phase 3): typed payloads, cron scheduling, planner + consent-gated actions
 curl localhost:8090/v1/jobs
 curl -X POST localhost:8090/v1/jobs -H 'Content-Type: application/json' -d '{
-  "name": "morning-briefing", "cron": "0 7 * * *", "payload": {}
+  "name": "morning-briefing", "cron": "0 7 * * *",
+  "payload": {"type": "briefing", "query": "what needs attention", "top_k": 5}
 }'
+curl -X POST localhost:8090/v1/jobs -H 'Content-Type: application/json' -d '{
+  "name": "water-plants", "cron": "0 18 * * *",
+  "payload": {"type": "reminder", "text": "Water the plants."}
+}'
+curl -X POST localhost:8090/v1/jobs/<id>/trigger   # run now
+curl localhost:8090/v1/suggestions                  # planner outbox
 
 # documents: upload, list, retrieve (Phase 2)
 curl -X POST localhost:8090/v1/documents -F "file=@report.pdf"

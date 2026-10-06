@@ -41,3 +41,9 @@ model = "embed"
 timeout_s = 60.0
 # st_model = "all-MiniLM-L6-v2"   # for backend = "sentence-transformers"
 #                                 # (needs: pip install -e ".[rag]")
+
+# Proactive engine (Phase 3): cron-driven routines, deterministic planner,
+# consent-gated actions. Disable to run purely on-demand.
+[scheduler]
+enabled = true
+tick_seconds = 30.0

@@ -54,7 +54,38 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
 """
-SCHEMA_VERSION = 2
+
+SCHEMA_V3 = """
+CREATE TABLE IF NOT EXISTS job_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    triggered_by TEXT NOT NULL DEFAULT 'schedule',
+    status TEXT NOT NULL DEFAULT 'running',
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    result_summary TEXT,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_runs_job ON job_runs(job_id);
+CREATE TABLE IF NOT EXISTS suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL DEFAULT 'note',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    job_run_id INTEGER REFERENCES job_runs(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    dismissed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS consents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_name TEXT NOT NULL,
+    granted_at TEXT NOT NULL,
+    granted_by TEXT NOT NULL DEFAULT 'user',
+    revoked_at TEXT
+);
+"""
+
+SCHEMA_VERSION = 3
 
 
 def _now() -> str:
@@ -71,6 +102,7 @@ class Database:
         with self._lock:
             self._conn.executescript(SCHEMA)
             self._conn.executescript(SCHEMA_V2)
+            self._conn.executescript(SCHEMA_V3)
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
             cur = self._conn.execute(
@@ -117,7 +149,14 @@ class Database:
         return [self._row_to_job(r) for r in rows]
 
     def update_job(self, job_id: str, **fields: str | None) -> dict | None:
-        allowed = {"name", "cron", "status", "last_run_at", "next_run_at"}
+        allowed = {
+            "name",
+            "cron",
+            "status",
+            "last_run_at",
+            "next_run_at",
+            "payload_json",
+        }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return self.get_job(job_id)
@@ -237,3 +276,122 @@ class Database:
             )
             rows = cur.fetchall()
         return [dict(r) for r in rows]
+
+    # ── Phase 3: runs, suggestions, consents ────────────────────
+
+    def get_due_jobs(self, now_iso: str) -> list[dict]:
+        """Jobs with a cron whose next run has passed and not paused."""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM jobs WHERE cron IS NOT NULL AND cron != ''"
+                " AND next_run_at IS NOT NULL AND next_run_at <= ?"
+                " AND (status IS NULL OR status != 'paused')"
+                " ORDER BY next_run_at",
+                (now_iso,),
+            )
+            rows = cur.fetchall()
+        return [self._row_to_job(r) for r in rows]
+
+    def create_run(self, job_id: str, triggered_by: str = "schedule") -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO job_runs (job_id, triggered_by, status, started_at)"
+                " VALUES (?, ?, 'running', ?)",
+                (job_id, triggered_by, _now()),
+            )
+            self._conn.commit()
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def finish_run(
+        self,
+        run_id: int,
+        status: str,
+        result_summary: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE job_runs SET status = ?, finished_at = ?,"
+                " result_summary = ?, error = ? WHERE id = ?",
+                (status, _now(), result_summary, error, run_id),
+            )
+            self._conn.commit()
+
+    def list_runs(self, job_id: str, limit: int = 50) -> list[dict]:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM job_runs WHERE job_id = ?"
+                " ORDER BY started_at DESC LIMIT ?",
+                (job_id, limit),
+            )
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def create_suggestion(
+        self,
+        kind: str,
+        title: str,
+        body: str = "",
+        job_run_id: int | None = None,
+    ) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO suggestions (kind, title, body, job_run_id, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (kind, title, body, job_run_id, _now()),
+            )
+            self._conn.commit()
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def list_suggestions(self, include_dismissed: bool = False) -> list[dict]:
+        with self._lock:
+            q = "SELECT * FROM suggestions"
+            if not include_dismissed:
+                q += " WHERE dismissed_at IS NULL"
+            q += " ORDER BY created_at DESC"
+            cur = self._conn.execute(q)
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def dismiss_suggestion(self, suggestion_id: int) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE suggestions SET dismissed_at = ?"
+                " WHERE id = ? AND dismissed_at IS NULL",
+                (_now(), suggestion_id),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def grant_consent(self, action_name: str, granted_by: str = "user") -> dict:
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO consents (action_name, granted_at, granted_by)"
+                " VALUES (?, ?, ?)",
+                (action_name, _now(), granted_by),
+            )
+            self._conn.commit()
+            row_id = cur.lastrowid
+        return {
+            "id": row_id,
+            "action": action_name,
+            "granted_by": granted_by,
+        }
+
+    def revoke_consent(self, action_name: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE consents SET revoked_at = ?"
+                " WHERE action_name = ? AND revoked_at IS NULL",
+                (_now(), action_name),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def consent_granted(self, action_name: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT id FROM consents WHERE action_name = ? AND revoked_at IS NULL",
+                (action_name,),
+            )
+            return cur.fetchone() is not None

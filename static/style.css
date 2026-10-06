@@ -37,3 +37,6 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #2a3642; }
 th { color: var(--dim); font-weight: 600; font-size: .85rem; }
 h2 { margin: .2rem 0; }
+
+.suggestion { border: 1px solid #ccc; border-radius: 6px; padding: .6rem .8rem; margin-bottom: .6rem; }
+.suggestion p { white-space: pre-wrap; margin: .4rem 0; }

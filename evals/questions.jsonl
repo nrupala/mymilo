@@ -1,0 +1,6 @@
+{"question": "What is the recommended mechanical seal replacement interval for a centrifugal pump?", "expected_file": "pump-maintenance.md", "keywords": ["18000", "operating hours"]}
+{"question": "At what leakage rate should a planned pump seal replacement be triggered?", "expected_file": "pump-maintenance.md", "keywords": ["10 mL per hour"]}
+{"question": "How often should drive cooling intake filters be cleaned in dusty environments?", "expected_file": "vfd-cooling.md", "keywords": ["90 days"]}
+{"question": "What is the preventive replacement interval for drive cooling fans?", "expected_file": "vfd-cooling.md", "keywords": ["40000 hours"]}
+{"question": "What is the Zone B/C vibration boundary for 15 to 300 kW motors?", "expected_file": "motor-bearings.md", "keywords": ["4.5 mm/s"]}
+{"question": "How often should motor bearing vibration be trended?", "expected_file": "motor-bearings.md", "keywords": ["monthly"]}

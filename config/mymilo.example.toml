@@ -29,3 +29,15 @@ timeout_s = 60.0
 # base_url = "https://openrouter.ai/api/v1"
 # api_key_env = "MYMILO_CLOUD_API_KEY"
 # timeout_s = 120.0
+
+# Embeddings for retrieval. Default is llama.cpp's OpenAI-compatible
+# /embeddings endpoint — no heavy dependencies. Point `route` at whichever
+# model route serves an embedding model, e.g.:
+#   llama-server -m nomic-embed-text.gguf --embedding --port 8080
+[embeddings]
+backend = "llamacpp"   # llamacpp | sentence-transformers | hash (test only)
+route = "local"
+model = "embed"
+timeout_s = 60.0
+# st_model = "all-MiniLM-L6-v2"   # for backend = "sentence-transformers"
+#                                 # (needs: pip install -e ".[rag]")

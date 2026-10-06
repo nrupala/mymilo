@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}MyMilo — Documents{% endblock %}
+{% block content %}
+<div class="jobs-wrap">
+  <h2>Documents</h2>
+  <p class="hint">Upload documents for retrieval-augmented chat. Supported:
+  txt, md, json, csv, html, odt, rtf out of the box; pdf and docx need the
+  <code>rag</code> extra (<code>pip install -e ".[rag]"</code>). Embeddings run
+  on the configured backend (llama.cpp <code>/embeddings</code> by default).</p>
+  <form id="upload" class="jobform" enctype="multipart/form-data">
+    <input type="file" id="file" required>
+    <input id="dtitle" placeholder="title (optional)">
+    <input id="dtags" placeholder="tags, comma-separated (optional)">
+    <button type="submit">Upload &amp; index</button>
+  </form>
+  <div id="upmsg" class="hint"></div>
+  <table id="doctable">
+    <thead><tr><th>Filename</th><th>Type</th><th>Chunks</th><th>Embedded with</th><th></th></tr></thead>
+    <tbody><tr><td colspan="5">loading…</td></tr></tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const tbody = document.querySelector('#doctable tbody');
+const upmsg = document.getElementById('upmsg');
+
+async function loadDocs() {
+  const r = await fetch('/v1/documents');
+  const j = await r.json();
+  tbody.innerHTML = '';
+  (j.documents || []).forEach(d => {
+    const tr = document.createElement('tr');
+    [d.filename, d.filetype, String(d.chunk_count), d.embed_backend].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    const td = document.createElement('td');
+    const b = document.createElement('button');
+    b.textContent = 'Delete';
+    b.addEventListener('click', async () => {
+      await fetch('/v1/documents/' + d.id, {method: 'DELETE'});
+      loadDocs();
+    });
+    td.appendChild(b); tr.appendChild(td);
+    tbody.appendChild(tr);
+  });
+  if (!(j.documents || []).length) {
+    tbody.innerHTML = '<tr><td colspan="5">no documents yet</td></tr>';
+  }
+}
+loadDocs();
+
+document.getElementById('upload').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const file = document.getElementById('file').files[0];
+  if (!file) return;
+  upmsg.textContent = 'Uploading and indexing…';
+  const fd = new FormData();
+  fd.append('file', file);
+  const title = document.getElementById('dtitle').value.trim();
+  const tags = document.getElementById('dtags').value.trim();
+  let url = '/v1/documents';
+  const q = [];
+  if (title) q.push('title=' + encodeURIComponent(title));
+  if (tags) q.push('tags=' + encodeURIComponent(tags));
+  if (q.length) url += '?' + q.join('&');
+  const r = await fetch(url, {method: 'POST', body: fd});
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    upmsg.textContent = 'Failed: ' + (j.error ? j.error.message : r.status);
+    return;
+  }
+  const j = await r.json();
+  upmsg.textContent = `Indexed ${j.filename}: ${j.chunk_count} chunks.`;
+  e.target.reset();
+  loadDocs();
+});
+</script>
+{% endblock %}

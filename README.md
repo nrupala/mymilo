@@ -43,7 +43,26 @@ curl localhost:8090/v1/jobs
 curl -X POST localhost:8090/v1/jobs -H 'Content-Type: application/json' -d '{
   "name": "morning-briefing", "cron": "0 7 * * *", "payload": {}
 }'
+
+# documents: upload, list, retrieve (Phase 2)
+curl -X POST localhost:8090/v1/documents -F "file=@report.pdf"
+curl localhost:8090/v1/documents
+curl -X POST localhost:8090/v1/retrieve -H 'Content-Type: application/json' -d '{
+  "query": "seal replacement interval", "top_k": 5
+}'
+
+# RAG chat: set "rag": {"enabled": true} — answer cites (source: file, chunk N)
+curl localhost:8090/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "local",
+  "messages": [{"role": "user", "content": "What is the seal interval?"}],
+  "rag": {"enabled": true, "top_k": 5}
+}'
 ```
+
+Embeddings default to llama.cpp's `/embeddings` endpoint — run it with an
+embedding model, e.g. `llama-server -m nomic-embed-text.gguf --embedding
+--port 8080`. See `config/mymilo.example.toml` (`[embeddings]`) and
+`evals/README.md` for the eval story.
 
 ## Configuration
 
@@ -65,9 +84,11 @@ tests/       pytest suite (MockTransport — no network)
 
 ## Status
 
-**Now:** Phase 1 skeleton — chat proxy, jobs CRUD, HTML UI, docs, CI.
-**Next:** Phase 2 retrieval (transfer from localragcoder) + evals.
-**Then:** proactive engine, fleet economics, OS platform layer.
+**Now:** Phase 2 retrieval — document ingestion, llama.cpp embeddings,
+cosine search, RAG chat with citation verification, evals.
+**Next:** Phase 3 proactive engine (deterministic planner, consent-gated
+actions, scheduler/digest design — maven transfers).
+**Then:** fleet economics, OS platform layer.
 
 ## License
 

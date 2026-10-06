@@ -6,6 +6,9 @@
     <label>Model
       <select id="model"><option>loading…</option></select>
     </label>
+    <label title="Retrieve relevant document chunks and cite them">
+      <input type="checkbox" id="userag"> Use documents
+    </label>
     <button id="clear">Clear</button>
   </div>
   <div id="log" class="log" aria-live="polite"></div>
@@ -56,14 +59,18 @@ form.addEventListener('submit', async (e) => {
   addMsg('user', text);
   addMsg('assistant', '…');
   const thinking = log.lastChild;
+  const body = {
+    model: modelSel.value,
+    messages: [{role: 'user', content: text}],
+  };
+  if (document.getElementById('userag').checked) {
+    body.rag = {enabled: true, top_k: 5};
+  }
   try {
     const r = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        model: modelSel.value,
-        messages: [{role: 'user', content: text}],
-      }),
+      body: JSON.stringify(body),
     });
     const j = await r.json();
     thinking.remove();
@@ -71,7 +78,12 @@ form.addEventListener('submit', async (e) => {
       addMsg('assistant', 'Error: ' + (j.error ? j.error.message : r.status));
     } else {
       const c = (j.choices && j.choices[0] && j.choices[0].message) || {};
-      addMsg('assistant', c.content || JSON.stringify(j));
+      let out = c.content || JSON.stringify(j);
+      if (j.citation_check && !j.citation_check.ok) {
+        out += '\n\n⚠ unverified citations: ' +
+          j.citation_check.unresolved.map(u => `${u.filename} chunk ${u.chunk}`).join(', ');
+      }
+      addMsg('assistant', out);
     }
   } catch (err) {
     thinking.remove();

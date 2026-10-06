@@ -6,14 +6,13 @@ honest errors, jobs CRUD (definitions only), Jinja2 UI, SQLite, TOML+env
 config, vault convention, ASF-grade docs, CI.
 **Exit:** tests green + behavior-verified live over real HTTP. Done.
 
-## Phase 2 — Retrieval by transfer
-Port `localragcoder` ingestion (chunking, embeddings, citations) as the RAG
-core — transfer, don't rebuild. Wire the Perplexity spec's evals: retrieval
-hit-rate, JSON-parse rate, no hallucinated citations.
-**No maven transfer here** — localragcoder wins; maven's RAG is the weaker
-cousin, and its retired chroma path is a cautionary tale (venv fragility).
-Keep retrieval dependency-light per the constitution.
-**Exit:** evals pass on his document set.
+## Phase 2 — Retrieval by transfer (shipped, v0.2.0)
+Ingestion (multi-format extract + chunk, adapted from localragcoder),
+embeddings via llama.cpp `/embeddings` by default (no heavy deps;
+sentence-transformers optional), SQLite-backed cosine search, RAG chat
+with citation-integrity verification, evals (hit-rate + citation checks).
+**Exit:** evals pass — 6/6 fixture questions rank the right document first;
+citation verifier catches hallucinated citations.
 
 ## Phase 3 — Proactive engine (maven transfers #1, #2, #4)
 Scheduler executes jobs (`cron`/`next_run_at` come alive) over a typed

@@ -32,7 +32,29 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL
 );
 """
-SCHEMA_VERSION = 1
+SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    filetype TEXT NOT NULL,
+    title TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    embed_backend TEXT NOT NULL DEFAULT '',
+    uploaded_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chunks (
+    id TEXT PRIMARY KEY,
+    doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    embedding BLOB,
+    embed_dim INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
+"""
+SCHEMA_VERSION = 2
 
 
 def _now() -> str:
@@ -48,7 +70,9 @@ class Database:
         self._lock = threading.Lock()
         with self._lock:
             self._conn.executescript(SCHEMA)
+            self._conn.executescript(SCHEMA_V2)
             self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA foreign_keys=ON;")
             cur = self._conn.execute(
                 "SELECT COUNT(*) AS n FROM schema_migrations WHERE version = ?",
                 (SCHEMA_VERSION,),
@@ -114,3 +138,102 @@ class Database:
             cur = self._conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             self._conn.commit()
             return cur.rowcount > 0
+
+    # ── documents ──────────────────────────────────────────────
+
+    def add_document(
+        self,
+        doc_id: str,
+        filename: str,
+        filetype: str,
+        title: str,
+        tags: str,
+        size_bytes: int,
+        chunk_count: int,
+        embed_backend: str,
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO documents
+                   (id, filename, filetype, title, tags, size_bytes,
+                    chunk_count, embed_backend, uploaded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    doc_id,
+                    filename,
+                    filetype,
+                    title,
+                    tags,
+                    size_bytes,
+                    chunk_count,
+                    embed_backend,
+                    _now(),
+                ),
+            )
+            self._conn.commit()
+
+    def get_document(self, doc_id: str) -> dict | None:
+        with self._lock:
+            cur = self._conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
+            row = cur.fetchone()
+        return dict(row) if row else None
+
+    def list_documents(self) -> list[dict]:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM documents ORDER BY uploaded_at DESC"
+            )
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_document(self, doc_id: str) -> bool:
+        with self._lock:
+            self._conn.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+            cur = self._conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    # ── chunks ─────────────────────────────────────────────────
+
+    def add_chunks(
+        self,
+        doc_id: str,
+        chunks: list[tuple[str, int, str, bytes, int]],
+    ) -> None:
+        """Add chunks as (chunk_id, chunk_index, content, embedding_bytes, dim)."""
+        with self._lock:
+            self._conn.executemany(
+                """INSERT INTO chunks
+                   (id, doc_id, chunk_index, content, embedding, embed_dim)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                [
+                    (cid, doc_id, idx, content, emb, dim)
+                    for cid, idx, content, emb, dim in chunks
+                ],
+            )
+            self._conn.commit()
+
+    def get_chunks(self, doc_id: str) -> list[dict]:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT id, doc_id, chunk_index, content, embed_dim FROM chunks "
+                "WHERE doc_id = ? ORDER BY chunk_index",
+                (doc_id,),
+            )
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def get_all_chunk_embeddings(self) -> list[dict]:
+        """All chunk embeddings for in-memory cosine search.
+
+        Personal-scale design: fine for thousands of chunks; the scaling
+        path (sqlite-vec / pgvector) is documented in ARCHITECTURE.md.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT c.id AS chunk_id, c.doc_id, c.chunk_index, c.content, "
+                "c.embedding, c.embed_dim, d.filename "
+                "FROM chunks c JOIN documents d ON c.doc_id = d.id"
+            )
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]

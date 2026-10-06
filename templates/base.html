@@ -22,15 +22,20 @@
 <main>{% block content %}{% endblock %}</main>
 <script>
 // Cloudflare Access fronts this app. When the session is missing or expired,
-// API calls receive the Access login page (HTML) instead of JSON — detect
-// that here and say so plainly, instead of surfacing a JSON parse error.
+// API calls are redirected to the Access login page (HTML) instead of JSON.
+// Detect that specifically and say so plainly. Other HTML responses (e.g.
+// Cloudflare error pages when a backend hiccups) get their own message, so a
+// server problem is never mislabeled as a sign-in problem.
 const _fetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const r = await _fetch(...args);
   const ct = r.headers.get('content-type') || '';
   const isApi = /\/v1\//.test(r.url) || /\/health$/.test(r.url);
-  if (isApi && (ct.includes('text/html') || (r.redirected && r.url.includes('cloudflareaccess.com')))) {
-    throw new Error('Sign-in required — open mymilo.aimlds.org in the browser, complete the Cloudflare sign-in, then try again.');
+  if (isApi && ct.includes('text/html')) {
+    if (r.redirected && r.url.includes('cloudflareaccess.com')) {
+      throw new Error('Sign-in required — open mymilo.aimlds.org in the browser, complete the Cloudflare sign-in, then try again.');
+    }
+    throw new Error(`Server hiccup (HTTP ${r.status}) — try again in a moment.`);
   }
   return r;
 };

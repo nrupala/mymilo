@@ -1,14 +1,15 @@
-/* MyMilo service worker — app-shell caching only.
+/* MyMilo service worker — app-shell caching that respects Cloudflare Access.
  *
- * The shell (pages, CSS, manifest, icons) is cached so the app opens
- * instantly and survives flaky networks. API calls (/v1/*, /health)
- * always go to the network: chat, routines, and documents are live
- * server state and are never served stale. If the network is down,
- * API calls fail fast and the page shows its own offline state.
+ * Page loads (navigations) are NETWORK-FIRST: the Access login completes via
+ * redirects that set session cookies, and a cached shell must never swallow
+ * that handshake. The fresh shell is cached for offline use (but never the
+ * Access login page itself).
+ * API calls (/v1/*, /health) always go to the network: chat, routines, and
+ * documents are live server state and are never served stale.
+ * Static assets are cache-first.
  */
-const SHELL_CACHE = 'mymilo-shell-v1';
-const SHELL = [
-  '/',
+const SHELL_CACHE = 'mymilo-shell-v2';
+const STATIC_ASSETS = [
   '/static/style.css',
   '/static/manifest.json',
   '/static/icon-192.png',
@@ -17,7 +18,7 @@ const SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(SHELL_CACHE).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
   );
 });
 
@@ -33,10 +34,27 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return; // let POSTs (chat etc.) through
   if (url.pathname.startsWith('/v1/') || url.pathname === '/health') return; // live API: network only
+
+  // Navigations: network first so the Access login handshake (redirects +
+  // session cookies) always completes; fall back to the cached shell offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then((res) => {
+        if (res.ok && !res.url.includes('cloudflareaccess.com')) {
+          const copy = res.clone();
+          caches.open(SHELL_CACHE).then((cache) => cache.put('/', copy));
+        }
+        return res;
+      }).catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  // Static assets: cache first.
   event.respondWith(
     caches.match(event.request).then((hit) => {
       const miss = fetch(event.request).then((res) => {
-        if (res.ok && (url.pathname === '/' || url.pathname.startsWith('/static/'))) {
+        if (res.ok) {
           const copy = res.clone();
           caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, copy));
         }

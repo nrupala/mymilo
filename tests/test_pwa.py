@@ -30,6 +30,10 @@ def test_service_worker_served_from_root_scope(client):
     assert r.headers["content-type"].startswith("application/javascript")
     assert r.headers["Service-Worker-Allowed"] == "/"
     assert "mymilo-shell" in r.text
+    # Navigations must be network-first so the Cloudflare Access login
+    # handshake (redirects + session cookies) is never swallowed by the cache.
+    assert "mode === 'navigate'" in r.text
+    assert "cloudflareaccess.com" in r.text
 
 
 def test_base_template_links_pwa(client):

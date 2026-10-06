@@ -1,0 +1,12 @@
+# Test-only config: points MyMilo at the stub backend for behavior verification.
+[server]
+host = "127.0.0.1"
+port = 8090
+
+[database]
+path = "/tmp/mymilo-stub-test.db"
+
+[[models]]
+name = "stub"
+base_url = "http://127.0.0.1:8081/v1"
+timeout_s = 10.0

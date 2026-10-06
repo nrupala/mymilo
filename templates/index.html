@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}MyMilo — Chat{% endblock %}
+{% block content %}
+<div class="chat-wrap">
+  <div class="controls">
+    <label>Model
+      <select id="model"><option>loading…</option></select>
+    </label>
+    <button id="clear">Clear</button>
+  </div>
+  <div id="log" class="log" aria-live="polite"></div>
+  <form id="form" class="composer">
+    <textarea id="input" rows="3" placeholder="Talk to your Milo…" required></textarea>
+    <button type="submit">Send</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const log = document.getElementById('log');
+const form = document.getElementById('form');
+const input = document.getElementById('input');
+const modelSel = document.getElementById('model');
+
+async function loadModels() {
+  try {
+    const r = await fetch('/v1/models');
+    const j = await r.json();
+    modelSel.innerHTML = '';
+    (j.data || []).forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.id;
+      modelSel.appendChild(o);
+    });
+  } catch (e) { modelSel.innerHTML = '<option>error</option>'; }
+}
+loadModels();
+
+function addMsg(role, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  const who = document.createElement('div');
+  who.className = 'who'; who.textContent = role === 'user' ? 'You' : 'MyMilo';
+  const body = document.createElement('div');
+  body.className = 'body'; body.textContent = text;
+  d.append(who, body);
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addMsg('user', text);
+  addMsg('assistant', '…');
+  const thinking = log.lastChild;
+  try {
+    const r = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: modelSel.value,
+        messages: [{role: 'user', content: text}],
+      }),
+    });
+    const j = await r.json();
+    thinking.remove();
+    if (!r.ok) {
+      addMsg('assistant', 'Error: ' + (j.error ? j.error.message : r.status));
+    } else {
+      const c = (j.choices && j.choices[0] && j.choices[0].message) || {};
+      addMsg('assistant', c.content || JSON.stringify(j));
+    }
+  } catch (err) {
+    thinking.remove();
+    addMsg('assistant', 'Request failed: ' + err.message);
+  }
+});
+
+document.getElementById('clear').addEventListener('click', () => { log.innerHTML = ''; });
+</script>
+{% endblock %}

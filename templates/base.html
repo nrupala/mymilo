@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}MyMilo{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">MyMilo <span class="ver">v{{ version }}</span></div>
+  <nav><a href="/">Chat</a><a href="/jobs">Jobs</a></nav>
+  <div id="health" class="health" title="backend reachability">…</div>
+</header>
+<main>{% block content %}{% endblock %}</main>
+<script>
+async function refreshHealth() {
+  const el = document.getElementById('health');
+  try {
+    const r = await fetch('/health');
+    const h = await r.json();
+    const parts = Object.entries(h.backends || {}).map(
+      ([k, v]) => `${k}:${v ? 'up' : 'down'}`);
+    el.textContent = parts.join(' · ') || 'no backends';
+    el.classList.toggle('down', parts.some(p => p.endsWith('down')));
+  } catch (e) { el.textContent = 'unreachable'; el.classList.add('down'); }
+}
+refreshHealth();
+setInterval(refreshHealth, 15000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

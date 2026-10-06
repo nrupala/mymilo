@@ -1,0 +1,31 @@
+# MyMilo example configuration. Copy to config/mymilo.toml and edit.
+# Secrets NEVER go in this file — see vault/README.md.
+
+[server]
+host = "127.0.0.1"
+port = 8090
+request_timeout_s = 90.0
+
+[database]
+path = "data/mymilo.db"
+
+# Model routes: name -> any OpenAI-compatible backend.
+# Phase 1 default: llama.cpp directly (start: llama-server -m <model.gguf> --port 8080).
+# Converged layering: the router + cost ledger live in the agentic OS; MyMilo
+# becomes a client of the OS's OpenAI-compatible endpoint (see SPEC.md).
+[[models]]
+name = "local"
+base_url = "http://127.0.0.1:8080/v1"
+timeout_s = 60.0
+
+# Example: point at the future OS endpoint instead of llama.cpp directly.
+# [[models]]
+# name = "os"
+# base_url = "http://127.0.0.1:8091/v1"
+
+# Example: cloud fallback. Key comes from the environment, never this file.
+# [[models]]
+# name = "cloud"
+# base_url = "https://openrouter.ai/api/v1"
+# api_key_env = "MYMILO_CLOUD_API_KEY"
+# timeout_s = 120.0

@@ -109,7 +109,19 @@ CREATE TABLE IF NOT EXISTS quota_flags (
 );
 """
 
-SCHEMA_VERSION = 4
+SCHEMA_V5 = """
+CREATE TABLE IF NOT EXISTS skill_files (
+    name TEXT PRIMARY KEY,
+    path TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    doc_id TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    version TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+);
+"""
+
+SCHEMA_VERSION = 5
 
 
 def _now() -> str:
@@ -128,6 +140,7 @@ class Database:
             self._conn.executescript(SCHEMA_V2)
             self._conn.executescript(SCHEMA_V3)
             self._conn.executescript(SCHEMA_V4)
+            self._conn.executescript(SCHEMA_V5)
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
             cur = self._conn.execute(
@@ -493,3 +506,47 @@ class Database:
                 (route, month, threshold, _now()),
             )
             self._conn.commit()
+
+    # ── Phase 5: skills ───────────────────────────────────────
+
+    def upsert_skill_file(
+        self,
+        name: str,
+        path: str,
+        sha256: str,
+        doc_id: str,
+        description: str = "",
+        version: str = "",
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO skill_files"
+                " (name, path, sha256, doc_id, description, version, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT(name) DO UPDATE SET"
+                " path=excluded.path, sha256=excluded.sha256,"
+                " doc_id=excluded.doc_id, description=excluded.description,"
+                " version=excluded.version, updated_at=excluded.updated_at",
+                (name, path, sha256, doc_id, description, version, _now()),
+            )
+            self._conn.commit()
+
+    def get_skill_file(self, name: str) -> dict | None:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM skill_files WHERE name = ?", (name,)
+            )
+            row = cur.fetchone()
+        return dict(row) if row else None
+
+    def list_skill_files(self) -> list[dict]:
+        with self._lock:
+            cur = self._conn.execute("SELECT * FROM skill_files ORDER BY name")
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_skill_file(self, name: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM skill_files WHERE name = ?", (name,))
+            self._conn.commit()
+            return cur.rowcount > 0

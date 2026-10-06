@@ -165,3 +165,31 @@ chat_completion ──► router ──► ledger recorder ──► ledger tabl
   per route (visible in `/health`); idle timestamps are the input a
   deployment-level scale-to-zero policy would key on. MyMilo does not
   manage backend processes itself.
+
+## OS platform layer (Phase 5)
+
+```
+[os] endpoint ──► route "os" registered, default_model = "os"
+                   (local router retained until the OS endpoint is live)
+
+skills/<name>/SKILL.md ──► scan_skills ──► documents (tag skill:<name>)
+   startup / POST /v1/skills/rescan / every poll_seconds
+
+GET /.well-known/mymilo.json   GET /llms.txt   GET /v1/mcp/tools
+```
+
+- **OS-client seam**: the converged layering (router + ledger live in the
+  OS; MyMilo is its client) is prepared, not pretended: setting one TOML
+  key repoints the resident at the OS endpoint. Nothing is deleted before
+  its replacement exists.
+- **Skills** (`app/skills.py`): frontmatter-parsed, sha-tracked in the
+  `skill_files` table, indexed as ordinary documents — one retrieval
+  machinery for docs and skills alike.
+- **Vault** (`docs/vault-alignment.md`): env → file fallback in
+  `Settings.api_key_for`. The `vault/` dir is git-ignored; KalaBodha is
+  the system of record when it exists.
+- **MCP catalog** (`mcp/catalog.json`): 19 tools as data — endpoint,
+  description, JSON input schema each. Served at `GET /v1/mcp/tools` for
+  agents to discover; the kernel's MCP server implements these shapes.
+- **Persona** (`[persona]`): name + system prompt; briefings render it as
+  the system template so citation conventions stay verifier-compatible.

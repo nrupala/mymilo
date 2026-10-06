@@ -60,3 +60,27 @@ tick_seconds = 30.0
 # input_usd_per_1k = 0.15
 # output_usd_per_1k = 0.60
 # free_quota_usd = 10.0
+
+# OS platform layer (Phase 5): point MyMilo at the agentic OS instead of
+# driving backends directly. When set, a route named "os" is registered
+# and becomes the default model (briefings use it) — MyMilo acts as a thin
+# client of the OS's OpenAI-compatible endpoint. The local router stays
+# until the OS endpoint is live.
+[os]
+# endpoint = "http://127.0.0.1:8091/v1"
+
+# Resident persona: name and system prompt used for briefings.
+[persona]
+name = "Milo"
+# system_prompt = "You are MyMilo, ..."
+
+# Drop-a-file skills (Phase 5): skills/<name>/SKILL.md, auto-indexed.
+[skills]
+enabled = true
+dir = "skills"
+poll_seconds = 300.0
+
+# Vault alignment (Phase 5): env vars always win; files named by the env
+# var inside this dir are the fallback. See docs/vault-alignment.md.
+[vault]
+# path = "vault"

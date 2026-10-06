@@ -1,6 +1,22 @@
 # Changelog
 
-## 0.4.0 — 2026-10-06
+## 0.5.0 — 2026-10-06
+Phase 5 — OS platform layer (maven transfers #5, #7, #8):
+- OS-client seam: `[os] endpoint` registers an `os` route and makes it the
+  default model (briefings follow); local router retained until the OS
+  endpoint is live — its deletion is a one-PR change then
+- Agents as first-class users: `/.well-known/mymilo.json`, `/llms.txt`,
+  `GET /v1/mcp/tools`
+- MCP tool catalog (`mcp/catalog.json`): 19-tool surface as data — the
+  contract the kernel's MCP server implements; reviewed, not ported
+- Skills convention: drop `skills/<name>/SKILL.md` (frontmatter
+  name/description/version); indexed on startup, on-demand rescan, and
+  every `[skills] poll_seconds`; skills are retrievable documents
+- Vault alignment (`docs/vault-alignment.md`): env wins,
+  `<vault-path>/<NAME>` file fallback; secrets never in config/logs
+- Persona: `[persona]` name/system_prompt + `GET /v1/persona`; briefings
+  use it with the standard `(source: file, chunk N)` citation convention
+- 69 tests green (11 new); live behavior-verified over HTTP
 Phase 4 — fleet economics (maven transfer #6):
 - Per-route cost metadata (`input_usd_per_1k`, `output_usd_per_1k`,
   `free_quota_usd`; local defaults stay zero)

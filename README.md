@@ -55,6 +55,14 @@ curl localhost:8090/v1/suggestions                  # planner outbox
 curl localhost:8090/v1/ledger/summary               # per-route monthly cost + quota %
 curl localhost:8090/v1/routes                       # cost metadata, live spend, cheapest-first rank
 
+# platform (Phase 5): skills, persona, agent surfaces
+curl localhost:8090/v1/skills                       # drop-a-file skills
+curl -X POST localhost:8090/v1/skills/rescan        # pick up added/changed/removed skills
+curl localhost:8090/v1/persona
+curl localhost:8090/.well-known/mymilo.json
+curl localhost:8090/llms.txt
+curl localhost:8090/v1/mcp/tools                    # 19-tool MCP surface as data
+
 # documents: upload, list, retrieve (Phase 2)
 curl -X POST localhost:8090/v1/documents -F "file=@report.pdf"
 curl localhost:8090/v1/documents

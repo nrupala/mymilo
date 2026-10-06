@@ -44,6 +44,43 @@ class SchedulerConfig:
 
 
 @dataclass
+class SkillsConfig:
+    enabled: bool = True
+    dir: str = "skills"
+    poll_seconds: float = 300.0
+
+
+@dataclass
+class PersonaConfig:
+    name: str = "Milo"
+    system_prompt: str = (
+        "You are MyMilo, Nrupal's proactive briefing assistant. "
+        "Write a concise briefing from the retrieved context below. "
+        "Lead with what needs attention, keep it scannable, and never "
+        "invent facts that are not in the context. If the context is thin, "
+        "say so plainly."
+    )
+
+
+@dataclass
+class VaultConfig:
+    # Directory holding secret files named by env-var, e.g.
+    # <path>/MYMILO_CLOUD_API_KEY. Env vars always win; files are the
+    # fallback. Aligned with the kalabodha-vault zero-trust pattern —
+    # see docs/vault-alignment.md.
+    path: str | None = None
+
+
+@dataclass
+class OSConfig:
+    # Agentic OS OpenAI-compatible endpoint. When set, a route named
+    # "os" is registered and becomes the default model — MyMilo acts as
+    # a thin client of the OS. The local router stays until the OS
+    # endpoint is live; its deletion is a one-PR change then.
+    endpoint: str | None = None
+
+
+@dataclass
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8090
@@ -52,6 +89,16 @@ class Settings:
     request_timeout_s: float = 90.0
     embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
+    skills: SkillsConfig = field(default_factory=SkillsConfig)
+    persona: PersonaConfig = field(default_factory=PersonaConfig)
+    vault: VaultConfig = field(default_factory=VaultConfig)
+    os: OSConfig = field(default_factory=OSConfig)
+    default_model: str = "local"
+
+    def __post_init__(self) -> None:
+        # Keep the default model routable no matter how Settings was built.
+        if self.models and not self.route_for(self.default_model):
+            self.default_model = self.models[0].name
 
     @classmethod
     def load(cls, config_path: str | None = None) -> Settings:
@@ -115,6 +162,41 @@ class Settings:
                 os.environ.get("MYMILO_SCHEDULER_TICK", sched.get("tick_seconds", 30.0))
             ),
         )
+
+        skills_cfg = data.get("skills", {})
+        s.skills = SkillsConfig(
+            enabled=os.environ.get(
+                "MYMILO_SKILLS_ENABLED", str(skills_cfg.get("enabled", True))
+            ).lower()
+            not in ("0", "false", "no"),
+            dir=os.environ.get("MYMILO_SKILLS_DIR", skills_cfg.get("dir", "skills")),
+            poll_seconds=float(
+                os.environ.get(
+                    "MYMILO_SKILLS_POLL", skills_cfg.get("poll_seconds", 300.0)
+                )
+            ),
+        )
+
+        persona_cfg = data.get("persona", {})
+        s.persona = PersonaConfig(
+            name=persona_cfg.get("name", "Milo"),
+            system_prompt=persona_cfg.get("system_prompt", PersonaConfig.system_prompt),
+        )
+
+        vault_cfg = data.get("vault", {})
+        s.vault = VaultConfig(
+            path=os.environ.get("MYMILO_VAULT_PATH", vault_cfg.get("path"))
+        )
+
+        os_cfg = data.get("os", {})
+        s.os = OSConfig(
+            endpoint=os.environ.get("MYMILO_OS_ENDPOINT", os_cfg.get("endpoint"))
+        )
+        if s.os.endpoint:
+            s.models.append(ModelRoute(name="os", base_url=s.os.endpoint.rstrip("/")))
+            s.default_model = "os"
+        elif not s.route_for(s.default_model) and s.models:
+            s.default_model = s.models[0].name
         return s
 
     def route_for(self, name: str) -> ModelRoute | None:
@@ -122,5 +204,19 @@ class Settings:
 
     def api_key_for(self, route: ModelRoute) -> str | None:
         if route.api_key_env:
-            return os.environ.get(route.api_key_env)
+            value = os.environ.get(route.api_key_env)
+            if value:
+                return value
+            # Vault fallback (aligned with kalabodha-vault, see
+            # docs/vault-alignment.md): a file named by the env var
+            # inside the vault dir. Env always wins.
+            if self.vault.path:
+                from pathlib import Path
+
+                candidate = Path(self.vault.path) / route.api_key_env
+                try:
+                    if candidate.is_file():
+                        return candidate.read_text().strip() or None
+                except OSError:
+                    pass
         return None

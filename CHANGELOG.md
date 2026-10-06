@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3 — 2026-10-06
+- Service worker respects Cloudflare Access: page loads are now
+  network-first so the Access login handshake (redirects + session
+  cookies) always completes instead of being swallowed by the cached
+  shell; the login page itself is never cached. Fixes the loop where
+  the app UI loaded from cache while every API call bounced to login.
+
 ## 0.6.2 — 2026-10-06
 - Phone UX: "Sign out" link in the header (Cloudflare Access logout),
   and a voice-dictation button in the chat composer (Web Speech API;

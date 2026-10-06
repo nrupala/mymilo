@@ -35,7 +35,7 @@ async function loadModels() {
       o.value = m.id; o.textContent = m.id;
       modelSel.appendChild(o);
     });
-  } catch (e) { modelSel.innerHTML = '<option>error</option>'; }
+  } catch (e) { modelSel.innerHTML = '<option>sign-in required</option>'; }
 }
 loadModels();
 
@@ -87,7 +87,7 @@ form.addEventListener('submit', async (e) => {
     }
   } catch (err) {
     thinking.remove();
-    addMsg('assistant', 'Request failed: ' + err.message);
+    addMsg('assistant', /sign-in required/i.test(err.message || '') ? err.message : 'Request failed: ' + err.message);
   }
 });
 

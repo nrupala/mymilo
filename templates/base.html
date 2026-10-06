@@ -21,6 +21,19 @@
 </header>
 <main>{% block content %}{% endblock %}</main>
 <script>
+// Cloudflare Access fronts this app. When the session is missing or expired,
+// API calls receive the Access login page (HTML) instead of JSON — detect
+// that here and say so plainly, instead of surfacing a JSON parse error.
+const _fetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const r = await _fetch(...args);
+  const ct = r.headers.get('content-type') || '';
+  const isApi = /\/v1\//.test(r.url) || /\/health$/.test(r.url);
+  if (isApi && (ct.includes('text/html') || (r.redirected && r.url.includes('cloudflareaccess.com')))) {
+    throw new Error('Sign-in required — open mymilo.aimlds.org in the browser, complete the Cloudflare sign-in, then try again.');
+  }
+  return r;
+};
 async function refreshHealth() {
   const el = document.getElementById('health');
   try {
@@ -30,7 +43,10 @@ async function refreshHealth() {
       ([k, v]) => `${k}:${v ? 'up' : 'down'}`);
     el.textContent = parts.join(' · ') || 'no backends';
     el.classList.toggle('down', parts.some(p => p.endsWith('down')));
-  } catch (e) { el.textContent = 'unreachable'; el.classList.add('down'); }
+  } catch (e) {
+    el.textContent = /sign-in required/i.test((e && e.message) || '') ? 'sign-in required' : 'unreachable';
+    el.classList.add('down');
+  }
 }
 refreshHealth();
 setInterval(refreshHealth, 15000);

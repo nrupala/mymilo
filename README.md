@@ -51,6 +51,10 @@ curl -X POST localhost:8090/v1/jobs -H 'Content-Type: application/json' -d '{
 curl -X POST localhost:8090/v1/jobs/<id>/trigger   # run now
 curl localhost:8090/v1/suggestions                  # planner outbox
 
+# fleet economics (Phase 4): per-call ledger, quota flags, route ranking
+curl localhost:8090/v1/ledger/summary               # per-route monthly cost + quota %
+curl localhost:8090/v1/routes                       # cost metadata, live spend, cheapest-first rank
+
 # documents: upload, list, retrieve (Phase 2)
 curl -X POST localhost:8090/v1/documents -F "file=@report.pdf"
 curl localhost:8090/v1/documents

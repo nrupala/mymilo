@@ -42,6 +42,7 @@ from .embeddings import (
 from .events import EventBus
 from .ingest import IngestionError
 from .jobs import JobNotFoundError, JobService
+from .ledger import check_quota, current_month, month_spend, recommend
 from .planner import Planner, create_suggestion
 from .rag import build_rag_messages, rag_sources, verify_citations
 from .router import (
@@ -66,9 +67,12 @@ from .schemas import (
     JobCreate,
     JobRun,
     JobUpdate,
+    LedgerEntry,
     ModelInfo,
     ModelList,
     RetrieveRequest,
+    RouteCostSummary,
+    RouteInfo,
     Suggestion,
 )
 
@@ -110,16 +114,35 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings.load()
     db = Database(settings.db_path)
-    router = ModelRouter(settings, transport=transport)
-    jobs = JobService(db)
-    docs = DocumentService(db, embedder or build_embedder(settings, transport))
 
     # ── Phase 3: proactive engine ──────────────────────────────
-    # Event bus -> deterministic planner -> consent-gated actions.
-    # The LLM never decides; it only drafts text inside job handlers.
+    # (bus/planner/actions are built before the router so the ledger
+    # recorder can emit quota events through them)
     bus = EventBus()
     actions = ActionRegistry()
     planner = Planner(bus, actions)
+
+    async def ledger_recorder(entry: dict) -> None:
+        db.record_ledger(
+            model=entry["model"],
+            route=entry["route"],
+            prompt_tokens=entry.get("prompt_tokens"),
+            completion_tokens=entry.get("completion_tokens"),
+            cost_usd=entry.get("cost_usd"),
+            latency_ms=entry.get("latency_ms"),
+            status=entry.get("status", "ok"),
+        )
+        route = settings.route_for(entry["route"])
+        if route is not None:
+            await check_quota(db, bus, route)
+
+    router = ModelRouter(settings, transport=transport, ledger=ledger_recorder)
+    jobs = JobService(db)
+    docs = DocumentService(db, embedder or build_embedder(settings, transport))
+
+    # ── Phase 3: proactive engine (continued) ──────────────────
+    # Event bus -> deterministic planner -> consent-gated actions.
+    # The LLM never decides; it only drafts text inside job handlers.
     executor_deps = {
         "settings": settings,
         "docs": docs,
@@ -271,6 +294,7 @@ def create_app(
                 "backend": docs.embedder.name,
                 "ok": embeddings_ok,
             },
+            "routes": router.route_stats(),
         }
 
     @app.get("/v1/models", response_model=ModelList)
@@ -421,6 +445,70 @@ def create_app(
         db.revoke_consent(action_name)
         return None
 
+    # ── Phase 4: fleet economics ───────────────────────────────
+
+    @app.get("/v1/ledger")
+    async def list_ledger(limit: int = 100):
+        limit = max(1, min(limit, 1000))
+        return {
+            "entries": [LedgerEntry(**e).model_dump() for e in db.list_ledger(limit)]
+        }
+
+    @app.get("/v1/ledger/summary")
+    async def ledger_summary(month: str | None = None):
+        month = month or current_month()
+        rows = db.ledger_monthly_summary(month)
+        by_route = {r["route"]: r for r in rows}
+        summaries = []
+        for m in settings.models:
+            r = by_route.get(m.name, {})
+            cost = float(r.get("cost_usd", 0.0))
+            quota = m.free_quota_usd
+            summaries.append(
+                RouteCostSummary(
+                    route=m.name,
+                    calls=int(r.get("calls", 0)),
+                    prompt_tokens=int(r.get("prompt_tokens", 0)),
+                    completion_tokens=int(r.get("completion_tokens", 0)),
+                    cost_usd=cost,
+                    free_quota_usd=quota,
+                    quota_pct=(cost / quota * 100) if quota else None,
+                ).model_dump()
+            )
+        return {"month": month, "routes": summaries}
+
+    @app.get("/v1/routes")
+    async def list_routes():
+        """Routes with cost metadata, live spend, and recommended order.
+
+        Informational: the chat endpoint keeps exact-name routing — this
+        never reroutes anything on its own, so no silent spend.
+        """
+        month = current_month()
+        ranked = recommend(settings.models)
+        rank_of = {r.name: i for i, r in enumerate(ranked)}
+        stats = router.route_stats()
+        out = []
+        for m in settings.models:
+            spend = month_spend(db, m.name, month)
+            quota = m.free_quota_usd
+            out.append(
+                RouteInfo(
+                    name=m.name,
+                    base_url=m.base_url,
+                    input_usd_per_1k=m.input_usd_per_1k,
+                    output_usd_per_1k=m.output_usd_per_1k,
+                    free_quota_usd=quota,
+                    month_spend_usd=spend,
+                    quota_pct=(spend / quota * 100) if quota else None,
+                    last_used_at=stats[m.name]["last_used_at"],
+                    consecutive_failures=stats[m.name]["consecutive_failures"],
+                    recommended_rank=rank_of[m.name],
+                ).model_dump()
+            )
+        out.sort(key=lambda r: r["recommended_rank"])
+        return {"routes": out}
+
     # ── HTML ─────────────────────────────────────────────────
 
     @app.get("/", response_class=HTMLResponse)
@@ -433,6 +521,12 @@ def create_app(
     async def jobs_page(request: Request):
         return templates.TemplateResponse(
             request, "jobs.html", {"version": __version__}
+        )
+
+    @app.get("/costs", response_class=HTMLResponse)
+    async def costs_page(request: Request):
+        return templates.TemplateResponse(
+            request, "costs.html", {"version": __version__}
         )
 
     @app.get("/documents", response_class=HTMLResponse)

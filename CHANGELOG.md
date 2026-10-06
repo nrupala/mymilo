@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.3.0 — 2026-10-06
+## 0.4.0 — 2026-10-06
+Phase 4 — fleet economics (maven transfer #6):
+- Per-route cost metadata (`input_usd_per_1k`, `output_usd_per_1k`,
+  `free_quota_usd`; local defaults stay zero)
+- Cost ledger: every model call recorded (tokens when reported, computed
+  USD cost, latency, ok/error status); unknown usage → NULL, never guessed
+- Quota flags: 70% warning / 100% exhausted emitted once per threshold per
+  month as planner suggestions — informs, never blocks or reroutes
+- `GET /v1/ledger`, `GET /v1/ledger/summary` (per-route monthly rollup +
+  quota %), `GET /v1/routes` (cost metadata, live spend, recommended
+  cheapest-first ranking)
+- Lifecycle discipline in the router: per-route `last_used_at` /
+  `consecutive_failures`, exposed via `/health`
+- `/costs` HTML page (summary, ranking, recent calls); nav link added
+- 58 tests green (10 new); live behavior-verified over HTTP
 Phase 3 — proactive engine (maven transfers #1, #2, #4):
 - Scheduler: dependency-free 5-field cron parser (`app/cron.py`, Vixie
   day-of-month/day-of-week OR semantics), `next_run_at` computed on

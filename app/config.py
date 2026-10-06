@@ -20,6 +20,12 @@ class ModelRoute:
     base_url: str
     api_key_env: str | None = None
     timeout_s: float = 60.0
+    # Cost metadata (Phase 4, fleet economics). Local backends stay at the
+    # zero defaults. Paid routes declare per-1k-token USD rates and an
+    # optional monthly free quota in USD; the ledger flags 70% and 100%.
+    input_usd_per_1k: float = 0.0
+    output_usd_per_1k: float = 0.0
+    free_quota_usd: float | None = None
 
 
 @dataclass
@@ -89,6 +95,13 @@ class Settings:
                     base_url=m["base_url"].rstrip("/"),
                     api_key_env=m.get("api_key_env"),
                     timeout_s=float(m.get("timeout_s", 60.0)),
+                    input_usd_per_1k=float(m.get("input_usd_per_1k", 0.0)),
+                    output_usd_per_1k=float(m.get("output_usd_per_1k", 0.0)),
+                    free_quota_usd=(
+                        float(m["free_quota_usd"])
+                        if m.get("free_quota_usd") is not None
+                        else None
+                    ),
                 )
             )
 

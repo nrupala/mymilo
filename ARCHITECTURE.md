@@ -95,7 +95,6 @@ over real HTTP (see CONTRIBUTING).
   routing; the endpoint signature does not change.
 
 ## Proactive engine (Phase 3)
-
 ```
 tick (every tick_seconds) ──► get_due_jobs ──► bus.emit(JOB_DUE)
     ──► planner rule "run-due-job" ──► actions.execute("job.execute")
@@ -144,3 +143,25 @@ POST /v1/chat/completions {"rag": {"enabled": true}}
   `tests/test_rag.py`: retrieval hit-rate (target >80%), citation
   integrity. CI uses `HashEmbedder` (machinery, deterministic); semantic
   quality numbers come from runs with a real embedding backend.
+
+## Fleet economics (Phase 4)
+
+```
+chat_completion ──► router ──► ledger recorder ──► ledger table
+                                          └─► check_quota ──► bus.emit(QUOTA_WARNING/QUOTA_EXHAUSTED)
+                                                              ──► planner ──► suggestion (kind=quota)
+```
+
+- `ModelRoute` carries `input_usd_per_1k`, `output_usd_per_1k`,
+  `free_quota_usd` (all optional; zero defaults = local/free).
+- The recorder is wired in `create_app` and also covers briefing jobs
+  (they go through the same `router.chat_completion`). Recording is
+  best-effort: it never breaks serving.
+- Cost math lives in `app/ledger.py`; `recommend()` ranks routes
+  free → free-quota → paid-by-rate for `GET /v1/routes`. The chat
+  endpoint keeps exact-name routing — cost-awareness informs, the human
+  (or a future OS policy) decides. No silent failover to paid, ever.
+- Lifecycle: the router tracks `last_used_at` / `consecutive_failures`
+  per route (visible in `/health`); idle timestamps are the input a
+  deployment-level scale-to-zero policy would key on. MyMilo does not
+  manage backend processes itself.

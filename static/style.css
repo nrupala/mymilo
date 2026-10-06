@@ -1,0 +1,39 @@
+/* MyMilo — minimal local stylesheet. No external dependencies. */
+:root { --bg: #101418; --panel: #182028; --ink: #e8eef2; --dim: #9fb0bd; --acc: #5ec8a7; --warn: #e0a458; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 1.2rem; padding: .7rem 1.2rem;
+         background: var(--panel); border-bottom: 1px solid #2a3642; }
+.brand { font-weight: 700; font-size: 1.1rem; }
+.ver { color: var(--dim); font-weight: 400; font-size: .8rem; }
+nav a { color: var(--dim); text-decoration: none; margin-right: 1rem; }
+nav a:hover { color: var(--ink); }
+.health { margin-left: auto; font-size: .8rem; color: var(--acc); }
+.health.down { color: var(--warn); }
+main { max-width: 860px; margin: 0 auto; padding: 1.2rem; }
+.chat-wrap, .jobs-wrap { display: flex; flex-direction: column; gap: 1rem; }
+.controls { display: flex; gap: 1rem; align-items: center; }
+.controls label { color: var(--dim); }
+select, input, textarea, button { font: inherit; }
+select, input, textarea { background: var(--panel); color: var(--ink);
+  border: 1px solid #2a3642; border-radius: 6px; padding: .5rem .7rem; }
+button { background: var(--acc); color: #0c1216; border: 0; border-radius: 6px;
+         padding: .5rem 1rem; cursor: pointer; font-weight: 600; }
+button:hover { filter: brightness(1.1); }
+.log { display: flex; flex-direction: column; gap: .8rem; min-height: 40vh;
+       max-height: 62vh; overflow-y: auto; }
+.msg { background: var(--panel); border-radius: 8px; padding: .7rem .9rem; }
+.msg.user { align-self: flex-end; max-width: 85%; background: #1f2c38; }
+.msg.assistant { align-self: flex-start; max-width: 95%; }
+.who { font-size: .75rem; color: var(--dim); margin-bottom: .25rem; }
+.body { white-space: pre-wrap; word-break: break-word; }
+.composer { display: flex; gap: .6rem; }
+.composer textarea { flex: 1; resize: vertical; }
+.hint { color: var(--dim); font-size: .9rem; }
+.jobform { display: flex; gap: .6rem; flex-wrap: wrap; }
+.jobform input { flex: 1; min-width: 160px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #2a3642; }
+th { color: var(--dim); font-weight: 600; font-size: .85rem; }
+h2 { margin: .2rem 0; }

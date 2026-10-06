@@ -1,0 +1,20 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install --no-cache-dir -e ".[dev]"
+      - name: Lint
+        run: ruff check app tests
+      - name: Format
+        run: ruff format --check app tests
+      - name: Test
+        run: python -m pytest -q

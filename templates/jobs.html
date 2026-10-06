@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}MyMilo — Jobs{% endblock %}
+{% block content %}
+<div class="jobs-wrap">
+  <h2>Job definitions</h2>
+  <p class="hint">Phase 1 stores definitions only — execution arrives with the
+  Phase 3 proactive engine. No job runs from this page.</p>
+  <form id="newjob" class="jobform">
+    <input id="jname" placeholder="Job name, e.g. morning-briefing" required maxlength="200">
+    <input id="jcron" placeholder="cron, e.g. 0 7 * * * (optional)">
+    <input id="jpayload" placeholder='payload JSON, e.g. {"to":"me"}'>
+    <button type="submit">Add job</button>
+  </form>
+  <table id="jobtable">
+    <thead><tr><th>ID</th><th>Name</th><th>Cron</th><th>Status</th><th></th></tr></thead>
+    <tbody><tr><td colspan="5">loading…</td></tr></tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const tbody = document.querySelector('#jobtable tbody');
+
+async function loadJobs() {
+  const r = await fetch('/v1/jobs');
+  const j = await r.json();
+  tbody.innerHTML = '';
+  (j.jobs || []).forEach(job => {
+    const tr = document.createElement('tr');
+    [job.id, job.name, job.cron || '—', job.status].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    const td = document.createElement('td');
+    const b = document.createElement('button');
+    b.textContent = 'Delete';
+    b.addEventListener('click', async () => {
+      await fetch('/v1/jobs/' + job.id, {method: 'DELETE'});
+      loadJobs();
+    });
+    td.appendChild(b); tr.appendChild(td);
+    tbody.appendChild(tr);
+  });
+  if (!(j.jobs || []).length) {
+    tbody.innerHTML = '<tr><td colspan="5">no jobs yet</td></tr>';
+  }
+}
+loadJobs();
+
+document.getElementById('newjob').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  let payload = {};
+  const raw = document.getElementById('jpayload').value.trim();
+  if (raw) { try { payload = JSON.parse(raw); } catch { alert('payload is not valid JSON'); return; } }
+  const r = await fetch('/v1/jobs', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('jname').value.trim(),
+      cron: document.getElementById('jcron').value.trim() || null,
+      payload,
+    }),
+  });
+  if (!r.ok) { alert('failed: ' + r.status); return; }
+  e.target.reset();
+  loadJobs();
+});
+</script>
+{% endblock %}

@@ -85,7 +85,31 @@ CREATE TABLE IF NOT EXISTS consents (
 );
 """
 
-SCHEMA_VERSION = 3
+SCHEMA_V4 = """
+CREATE TABLE IF NOT EXISTS ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    model TEXT NOT NULL,
+    route TEXT NOT NULL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    cost_usd REAL,
+    latency_ms REAL,
+    status TEXT NOT NULL DEFAULT 'ok'
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_ts ON ledger(ts);
+CREATE INDEX IF NOT EXISTS idx_ledger_route ON ledger(route);
+CREATE TABLE IF NOT EXISTS quota_flags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    route TEXT NOT NULL,
+    month TEXT NOT NULL,
+    threshold REAL NOT NULL,
+    flagged_at TEXT NOT NULL,
+    UNIQUE(route, month, threshold)
+);
+"""
+
+SCHEMA_VERSION = 4
 
 
 def _now() -> str:
@@ -103,6 +127,7 @@ class Database:
             self._conn.executescript(SCHEMA)
             self._conn.executescript(SCHEMA_V2)
             self._conn.executescript(SCHEMA_V3)
+            self._conn.executescript(SCHEMA_V4)
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
             cur = self._conn.execute(
@@ -395,3 +420,76 @@ class Database:
                 (action_name,),
             )
             return cur.fetchone() is not None
+
+    # ── Phase 4: cost ledger ──────────────────────────────────
+
+    def record_ledger(
+        self,
+        model: str,
+        route: str,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        cost_usd: float | None,
+        latency_ms: float | None,
+        status: str = "ok",
+    ) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO ledger (ts, model, route, prompt_tokens,"
+                " completion_tokens, cost_usd, latency_ms, status)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    _now(),
+                    model,
+                    route,
+                    prompt_tokens,
+                    completion_tokens,
+                    cost_usd,
+                    latency_ms,
+                    status,
+                ),
+            )
+            self._conn.commit()
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def list_ledger(self, limit: int = 100) -> list[dict]:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM ledger ORDER BY ts DESC LIMIT ?", (limit,)
+            )
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def ledger_monthly_summary(self, month: str) -> list[dict]:
+        """Per-route rollup for a YYYY-MM month: calls, tokens, cost."""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT route,"
+                " COUNT(*) AS calls,"
+                " COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,"
+                " COALESCE(SUM(completion_tokens), 0) AS completion_tokens,"
+                " COALESCE(SUM(cost_usd), 0.0) AS cost_usd"
+                " FROM ledger WHERE substr(ts, 1, 7) = ? AND status = 'ok'"
+                " GROUP BY route",
+                (month,),
+            )
+            rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def quota_flagged(self, route: str, month: str, threshold: float) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT id FROM quota_flags"
+                " WHERE route = ? AND month = ? AND threshold = ?",
+                (route, month, threshold),
+            )
+            return cur.fetchone() is not None
+
+    def mark_quota_flagged(self, route: str, month: str, threshold: float) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO quota_flags"
+                " (route, month, threshold, flagged_at) VALUES (?, ?, ?, ?)",
+                (route, month, threshold, _now()),
+            )
+            self._conn.commit()

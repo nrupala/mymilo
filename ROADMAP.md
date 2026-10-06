@@ -32,13 +32,23 @@ Routines (schedule, run-now, pause/resume, runs, suggestions).
 **Exit:** a briefing ran end-to-end on the scheduler tick over real HTTP —
 verified live 2026-10-06.
 
-## Phase 4 — Fleet economics (maven transfer #6)
+## Phase 4 — Fleet economics (shipped, v0.4.0, maven transfer #6)
 Cost-aware routing (local-first, free-tier preference), per-call ledger,
 70%-of-free-tier flags per the standing fleet doctrine.
-**Lifecycle discipline** (transfer #6): single-instance, memory gates, idle
-auto-stop → backend scale-to-zero policy, restart discipline — folded into
-the router's backend management.
-**Exit:** ledger reconciles against provider dashboards for a week.
+**Ledger**: every model call recorded with token usage (when reported) and
+computed USD cost — missing usage stored as NULL, never estimated.
+**Quota flags**: routes declare `free_quota_usd`; crossing 70% / 100% emits
+planner events → suggestions (once per threshold per month, never blocks).
+**Cost-aware routing**: `GET /v1/routes` ranks local-first → free-quota →
+paid; the chat endpoint keeps exact-name routing — nothing ever silently
+fails over to a paid route (spend stays human-approved).
+**Lifecycle discipline** (transfer #6): per-route `last_used_at` /
+`consecutive_failures` in the router, exposed via `/health`; idle tracking
+enables scale-to-zero policy upstream. `/costs` HTML page: monthly summary,
+route ranking, recent calls.
+**Exit:** ledger reconciles against provider dashboards for a week —
+verified live 2026-10-06 (stub usage backend: costs, quota suggestion,
+ranking all observed over HTTP).
 
 ## Phase 5 — OS platform layer (maven transfers #5, #7, #8)
 Router + ledger migrate into the agentic OS; MyMilo becomes a thin client of

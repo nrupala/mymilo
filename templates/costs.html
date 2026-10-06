@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}MyMilo — Costs{% endblock %}
+{% block content %}
+<div class="jobs-wrap">
+  <h2>Fleet economics</h2>
+  <p class="hint">Every model call is recorded with token usage (when the
+  backend reports it) and computed USD cost. Missing usage is shown as
+  unknown — never estimated. Routes are ranked cheapest-first; the chat
+  endpoint keeps exact-name routing, so nothing here reroutes spend on
+  its own.</p>
+
+  <h3>This month <span id="month"></span></h3>
+  <table id="summary">
+    <thead><tr><th>Route</th><th>Calls</th><th>Tokens in/out</th><th>Cost USD</th>
+    <th>Free quota</th><th>Quota used</th></tr></thead>
+    <tbody><tr><td colspan="6">loading…</td></tr></tbody>
+  </table>
+
+  <h3>Routes (recommended order)</h3>
+  <table id="routes">
+    <thead><tr><th>#</th><th>Route</th><th>$/1k in</th><th>$/1k out</th>
+    <th>Month spend</th><th>Last used</th><th>Failures</th></tr></thead>
+    <tbody><tr><td colspan="7">loading…</td></tr></tbody>
+  </table>
+
+  <h3>Recent calls</h3>
+  <table id="ledger">
+    <thead><tr><th>Time (UTC)</th><th>Model</th><th>Route</th><th>Tokens</th>
+    <th>Cost USD</th><th>ms</th><th>Status</th></tr></thead>
+    <tbody><tr><td colspan="7">loading…</td></tr></tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const money = v => v == null ? 'unknown' : '$' + Number(v).toFixed(4);
+
+async function load() {
+  const s = await (await fetch('/v1/ledger/summary')).json();
+  document.getElementById('month').textContent = s.month;
+  const tb = document.querySelector('#summary tbody');
+  tb.innerHTML = '';
+  s.routes.forEach(r => {
+    const tr = document.createElement('tr');
+    [r.route, r.calls, r.prompt_tokens + '/' + r.completion_tokens,
+     money(r.cost_usd),
+     r.free_quota_usd == null ? '—' : '$' + r.free_quota_usd,
+     r.quota_pct == null ? '—' : r.quota_pct.toFixed(1) + '%'
+       + (r.quota_pct >= 100 ? ' ⚠ exhausted' : r.quota_pct >= 70 ? ' ⚠' : '')
+    ].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+
+  const r2 = await (await fetch('/v1/routes')).json();
+  const rb = document.querySelector('#routes tbody');
+  rb.innerHTML = '';
+  r2.routes.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    [i + 1, r.name, money(r.input_usd_per_1k), money(r.output_usd_per_1k),
+     money(r.month_spend_usd), r.last_used_at || 'never', r.consecutive_failures
+    ].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    rb.appendChild(tr);
+  });
+
+  const l = await (await fetch('/v1/ledger?limit=50')).json();
+  const lb = document.querySelector('#ledger tbody');
+  lb.innerHTML = '';
+  l.entries.forEach(e => {
+    const tr = document.createElement('tr');
+    [e.ts.slice(0, 19).replace('T', ' '), e.model, e.route,
+     (e.prompt_tokens ?? '?') + '/' + (e.completion_tokens ?? '?'),
+     money(e.cost_usd), e.latency_ms ?? '—', e.status
+    ].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    lb.appendChild(tr);
+  });
+  if (!l.entries.length) lb.innerHTML = '<tr><td colspan="7">no calls yet</td></tr>';
+}
+load();
+</script>
+{% endblock %}

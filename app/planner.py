@@ -93,6 +93,18 @@ class Planner:
                 action_params={"kind": "note"},
             )
         )
+        # Free-tier quota thresholds become suggestions, never blocks.
+        # Spending policy stays human: the system informs, Nrupal decides.
+        for event_type in ("QUOTA_WARNING", "QUOTA_EXHAUSTED"):
+            self.rules.append(
+                Rule(
+                    name="quota-to-suggestion",
+                    event_type=event_type,
+                    predicate=_always,
+                    action_name="suggestion.create",
+                    action_params={"kind": "quota"},
+                )
+            )
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -143,6 +155,10 @@ def create_suggestion(
         body = body or str(event.get("result_summary") or "")
         if job_run_id is None:
             job_run_id = event.get("run_id")
+    else:
+        # Generic events (e.g. QUOTA_WARNING) carry their own copy.
+        title = title or str(event.get("title") or etype or "Notice")
+        body = body or str(event.get("body") or "")
     kind = kind or "note"
     title = title or "Suggestion"
     suggestion_id = db.create_suggestion(

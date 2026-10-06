@@ -85,6 +85,41 @@ class ActionInfo(BaseModel):
     consent_granted: bool
 
 
+class LedgerEntry(BaseModel):
+    id: int
+    ts: str
+    model: str
+    route: str
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    cost_usd: float | None
+    latency_ms: float | None
+    status: str
+
+
+class RouteCostSummary(BaseModel):
+    route: str
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float
+    free_quota_usd: float | None
+    quota_pct: float | None
+
+
+class RouteInfo(BaseModel):
+    name: str
+    base_url: str
+    input_usd_per_1k: float
+    output_usd_per_1k: float
+    free_quota_usd: float | None
+    month_spend_usd: float
+    quota_pct: float | None
+    last_used_at: str | None
+    consecutive_failures: int
+    recommended_rank: int
+
+
 class ModelInfo(BaseModel):
     id: str
     object: str = "model"

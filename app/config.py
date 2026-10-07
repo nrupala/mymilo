@@ -20,6 +20,11 @@ class ModelRoute:
     base_url: str
     api_key_env: str | None = None
     timeout_s: float = 60.0
+    # Backend model ID override. When set, the router sends this as the
+    # "model" field to the backend instead of the route name. Used for
+    # cloud providers where the route name (e.g. "openrouter") is not a
+    # valid model ID (e.g. "deepseek/deepseek-chat").
+    model_id: str | None = None
     # Cost metadata (Phase 4, fleet economics). Local backends stay at the
     # zero defaults. Paid routes declare per-1k-token USD rates and an
     # optional monthly free quota in USD; the ledger flags 70% and 100%.
@@ -142,6 +147,7 @@ class Settings:
                     base_url=m["base_url"].rstrip("/"),
                     api_key_env=m.get("api_key_env"),
                     timeout_s=float(m.get("timeout_s", 60.0)),
+                    model_id=m.get("model_id"),
                     input_usd_per_1k=float(m.get("input_usd_per_1k", 0.0)),
                     output_usd_per_1k=float(m.get("output_usd_per_1k", 0.0)),
                     free_quota_usd=(

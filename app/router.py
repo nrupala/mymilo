@@ -81,6 +81,9 @@ class ModelRouter:
         route = self.settings.route_for(model_name)
         if route is None:
             raise ModelNotFoundError(model_name, [m.name for m in self.settings.models])
+        # Rewrite the model ID for backends that need it (e.g. OpenRouter).
+        if route.model_id:
+            payload = {**payload, "model": route.model_id}
         started = time.monotonic()
         try:
             async with self._client(route.timeout_s) as client:

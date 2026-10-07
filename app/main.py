@@ -930,6 +930,16 @@ def create_app(
                     catalog["tools"] = catalog.get("tools", []) + gc_tools
                 except (OSError, json.JSONDecodeError):
                     pass
+            # Merge Cloudflare tools (Phase 3)
+            cf_path = mcp_catalog_path.parent / "cloudflare-tools.json"
+            if cf_path.exists():
+                try:
+                    cf_tools = json.loads(cf_path.read_text())
+                    if isinstance(cf_tools, dict):
+                        cf_tools = cf_tools.get("tools", [])
+                    catalog["tools"] = catalog.get("tools", []) + cf_tools
+                except (OSError, json.JSONDecodeError):
+                    pass
             return catalog
         except (OSError, json.JSONDecodeError) as exc:
             raise HTTPException(

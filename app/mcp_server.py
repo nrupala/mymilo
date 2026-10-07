@@ -67,6 +67,17 @@ def load_catalog(mcp_dir: Path) -> dict:
         except Exception:
             pass
 
+    # Add Cloudflare tools (Phase 3)
+    cf_tools_path = mcp_dir / "cloudflare-tools.json"
+    if cf_tools_path.exists():
+        try:
+            cf_tools = json.loads(cf_tools_path.read_text())
+            if isinstance(cf_tools, dict):
+                cf_tools = cf_tools.get("tools", [])
+            tools.extend(cf_tools)
+        except Exception:
+            pass
+
     return {"tools": tools}
 
 
@@ -176,6 +187,50 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
         return {"ok": True}
 
     return router
+
+
+async def _cloudflare_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Execute Cloudflare integration tools."""
+    from .integrations.cloudflare import CloudflareClient
+
+    try:
+        client = CloudflareClient()
+    except ValueError:
+        return {
+            "content": [
+                {"type": "text", "text": "Cloudflare not configured (token missing)"}
+            ],
+            "isError": True,
+        }
+
+    try:
+        if tool_name == "cf_list_zones":
+            zones = await client.list_zones()
+            summary = "\n".join(f"- {z['name']} ({z['status']})" for z in zones[:20])
+            return {"content": [{"type": "text", "text": summary or "No zones"}]}
+
+        elif tool_name == "cf_list_dns":
+            records = await client.list_dns_records(args["zone_id"])
+            summary = "\n".join(
+                f"- {r['type']} {r['name']} -> {r['content']}" for r in records[:30]
+            )
+            return {"content": [{"type": "text", "text": summary or "No records"}]}
+
+        elif tool_name == "cf_list_workers":
+            workers = await client.list_workers(args["account_id"])
+            summary = "\n".join(f"- {w['id']}" for w in workers[:20])
+            return {"content": [{"type": "text", "text": summary or "No workers"}]}
+
+        else:
+            return {
+                "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
+                "isError": True,
+            }
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": f"Cloudflare error: {e}"}],
+            "isError": True,
+        }
 
 
 async def _gmail_calendar_tool(
@@ -340,6 +395,10 @@ async def _call_tool(
     # ── Gmail/Calendar (Phase 3, privacy-first) ────────────────
     if tool_name.startswith("gmail_") or tool_name.startswith("calendar_"):
         return await _gmail_calendar_tool(tool_name, args, caller)
+
+    # ── Cloudflare (Phase 3) ─────────────────────────────────
+    if tool_name.startswith("cf_"):
+        return await _cloudflare_tool(tool_name, args)
 
     # For Phase 1, support the core tools via direct function calls.
     # Full HTTP mapping comes in Phase 1b.

@@ -393,6 +393,20 @@ def create_app(
         active_skill: str | None = None
         skill = match_skill(req.messages[-1].content, app.state.skills_dir)
         messages = [m.model_dump() for m in req.messages]
+        # Current date: models have training cutoffs; grounding them in
+        # today prevents "stuck in 2024" answers.
+        from datetime import UTC, datetime
+
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        messages = [
+            {
+                "role": "system",
+                "content": f"Today is {today}. Your training data may be older; "
+                "do not present past events as current. If you lack current "
+                "data for a question, say what you need instead of guessing.",
+            },
+            *messages,
+        ]
         if skill:
             active_skill = skill["name"]
             messages = [

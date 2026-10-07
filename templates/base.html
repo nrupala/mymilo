@@ -31,7 +31,9 @@ window.fetch = async (...args) => {
   const r = await _fetch(...args);
   const ct = r.headers.get('content-type') || '';
   const isApi = /\/v1\//.test(r.url) || /\/health$/.test(r.url);
-  if (isApi && ct.includes('text/html')) {
+  // /v1/export intentionally returns html/docx/csv files — not an error.
+  const isExport = /\/v1\/export/.test(r.url);
+  if (isApi && !isExport && ct.includes('text/html')) {
     if (r.redirected && r.url.includes('cloudflareaccess.com')) {
       throw new Error('Sign-in required — open mymilo.aimlds.org in the browser, complete the Cloudflare sign-in, then try again.');
     }

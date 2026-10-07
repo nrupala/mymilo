@@ -189,9 +189,16 @@ def create_app(
     async def lifespan(app: FastAPI):
         task = None
         if settings.skills.enabled:
-            # Drop-a-file skills are indexed before serving.
-            await scan_skills(db, docs, skills_dir)
-            app.state.last_skill_scan = asyncio.get_event_loop().time()
+            # Drop-a-file skills are indexed in background (v0.23.1).
+            # Blocking startup on 73 skills hangs; index async instead.
+            async def _bg_skill_scan():
+                try:
+                    await scan_skills(db, docs, skills_dir)
+                    app.state.last_skill_scan = asyncio.get_event_loop().time()
+                except Exception:
+                    pass  # Best-effort; skills work via file matching
+            
+            asyncio.create_task(_bg_skill_scan())
         if settings.scheduler.enabled:
             task = asyncio.create_task(scheduler_loop(app))
         yield

@@ -649,11 +649,21 @@ def create_app(
             payload["messages"] = messages
 
         # Resolve "auto" to the best route by complexity.
+        # Skills need capable models — route to cloud when a skill is active.
         actual_model = req.model
         if req.model == "auto":
-            actual_model = route_for_complexity(
-                user_text, settings, default=settings.default_model
-            )
+            if active_skill:
+                cloud = [
+                    m.name
+                    for m in settings.models
+                    if m.name in ("deepseek", "openrouter", "cloud")
+                    and settings.api_key_for(m)
+                ]
+                actual_model = cloud[0] if cloud else settings.default_model
+            else:
+                actual_model = route_for_complexity(
+                    user_text, settings, default=settings.default_model
+                )
         data = await router.chat_completion(actual_model, payload)
         data["routed_model"] = actual_model
 

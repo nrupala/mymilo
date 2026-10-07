@@ -409,28 +409,32 @@ def create_app(
             )
 
     # ── v0.10.0: session memory endpoints ──────────────────────
+    # ── v0.11.0: scoped per user (Cloudflare Access email header) ──
+    def _user_email(request: Request) -> str:
+        return request.headers.get("cf-access-authenticated-user-email", "")
+
     @app.get("/v1/sessions")
-    async def list_sessions():
-        return {"sessions": memory.list_sessions()}
+    async def list_sessions(request: Request):
+        return {"sessions": memory.list_sessions(_user_email(request))}
 
     @app.post("/v1/sessions")
-    async def create_session():
-        sid = memory.create_session()
+    async def create_session(request: Request):
+        sid = memory.create_session(_user_email(request))
         return {"id": sid}
 
     @app.get("/v1/sessions/{session_id}")
-    async def get_session(session_id: str):
-        msgs = memory.get_messages(session_id)
+    async def get_session(session_id: str, request: Request):
+        email = _user_email(request)
+        msgs = memory.get_messages(session_id, email)
         if not msgs:
-            # Could be empty or nonexistent; list to check.
-            ids = [s["id"] for s in memory.list_sessions(limit=1000)]
+            ids = [s["id"] for s in memory.list_sessions(email, limit=1000)]
             if session_id not in ids:
                 raise HTTPException(status_code=404, detail="Session not found")
         return {"id": session_id, "messages": msgs}
 
     @app.delete("/v1/sessions/{session_id}")
-    async def delete_session(session_id: str):
-        memory.delete_session(session_id)
+    async def delete_session(session_id: str, request: Request):
+        memory.delete_session(session_id, _user_email(request))
         return {"deleted": session_id}
 
     @app.get("/v1/models", response_model=ModelList)
@@ -441,7 +445,9 @@ def create_app(
         return ModelList(data=models)
 
     @app.post("/v1/chat/completions")
-    async def chat_completions(req: ChatCompletionRequest):
+    async def chat_completions(req: ChatCompletionRequest, request: Request):
+        # v0.11.0: user identity from Cloudflare Access.
+        user_email = request.headers.get("cf-access-authenticated-user-email", "")
         if req.stream:
             raise HTTPException(
                 status_code=400, detail="streaming is not implemented in this phase"
@@ -495,9 +501,10 @@ def create_app(
         skill = match_skill(req.messages[-1].content, app.state.skills_dir)
 
         # ── v0.10.0: session memory ──────────────────────────────
+        # ── v0.11.0: scoped to user ──────────────────────────────
         # Load recent turns for context; save this turn afterwards.
         # Auto-create a session if the client didn't send one.
-        session_id = req.session_id or memory.create_session()
+        session_id = req.session_id or memory.create_session(user_email)
         history = memory.recent_context(session_id, max_turns=10)
         messages = [m.model_dump() for m in req.messages]
         # Insert history after any leading system messages.
@@ -542,7 +549,7 @@ def create_app(
             "go back to",
         ]
         if any(t in user_text.lower() for t in _hist_triggers):
-            past = memory.list_sessions(limit=10)
+            past = memory.list_sessions(user_email, limit=10)
             # Exclude the current session.
             past = [s for s in past if s["id"] != session_id][:5]
             if past:

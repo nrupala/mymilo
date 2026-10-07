@@ -1,10 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (c) 2026 Nrupal Akolkar
-"""Session memory spine for Milo (v0.10.0).
+"""Session memory spine for Milo (v0.10.0, multi-user in v0.11.0).
 
-Every conversation is a session. Sessions persist in SQLite; the PWA
-lists them and resumes them. Recent turns are injected as context so
-Milo remembers what was just discussed.
+Every conversation is a session, scoped to a user (by email from
+Cloudflare Access). Two users = two separate memories, two IDs.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from pathlib import Path
 
 
 class MemoryStore:
-    """SQLite-backed session store."""
+    """SQLite-backed session store, isolated per user."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -29,12 +28,20 @@ class MemoryStore:
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
+                    user_email TEXT NOT NULL DEFAULT '',
                     title TEXT NOT NULL DEFAULT 'New chat',
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 )
                 """
             )
+            # Migrate v0.10.x DBs that lack user_email.
+            cols = [r[1] for r in c.execute("PRAGMA table_info(sessions)")]
+            if "user_email" not in cols:
+                c.execute(
+                    "ALTER TABLE sessions ADD COLUMN "
+                    "user_email TEXT NOT NULL DEFAULT ''"
+                )
             c.execute(
                 """
                 CREATE TABLE IF NOT EXISTS messages (
@@ -49,31 +56,43 @@ class MemoryStore:
             c.execute(
                 "CREATE INDEX IF NOT EXISTS idx_msg_session ON messages(session_id, id)"
             )
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sess_user "
+                "ON sessions(user_email, updated_at DESC)"
+            )
 
-    def create_session(self, title: str = "New chat") -> str:
+    def create_session(self, user_email: str = "", title: str = "New chat") -> str:
         sid = uuid.uuid4().hex[:12]
         now = time.time()
         with sqlite3.connect(self.path) as c:
             c.execute(
-                "INSERT INTO sessions (id, title, created_at, updated_at)"
-                " VALUES (?,?,?,?)",
-                (sid, title, now, now),
+                "INSERT INTO sessions (id, user_email, title, created_at, updated_at)"
+                " VALUES (?,?,?,?,?)",
+                (sid, user_email, title, now, now),
             )
         return sid
 
-    def list_sessions(self, limit: int = 50) -> list[dict]:
+    def list_sessions(self, user_email: str = "", limit: int = 50) -> list[dict]:
         with sqlite3.connect(self.path) as c:
             c.row_factory = sqlite3.Row
             rows = c.execute(
                 "SELECT id, title, created_at, updated_at FROM sessions"
-                " ORDER BY updated_at DESC LIMIT ?",
-                (limit,),
+                " WHERE user_email=? ORDER BY updated_at DESC LIMIT ?",
+                (user_email, limit),
             ).fetchall()
             return [dict(r) for r in rows]
 
-    def get_messages(self, session_id: str, limit: int = 100) -> list[dict]:
+    def get_messages(
+        self, session_id: str, user_email: str = "", limit: int = 100
+    ) -> list[dict]:
         with sqlite3.connect(self.path) as c:
             c.row_factory = sqlite3.Row
+            # Verify the session belongs to this user.
+            owner = c.execute(
+                "SELECT user_email FROM sessions WHERE id=?", (session_id,)
+            ).fetchone()
+            if not owner or owner["user_email"] != user_email:
+                return []
             rows = c.execute(
                 "SELECT role, content, created_at FROM messages"
                 " WHERE session_id=? ORDER BY id ASC LIMIT ?",
@@ -90,7 +109,6 @@ class MemoryStore:
                 (session_id, role, content, now),
             )
             c.execute("UPDATE sessions SET updated_at=? WHERE id=?", (now, session_id))
-            # Auto-title from the first user message.
             if role == "user":
                 count = c.execute(
                     "SELECT COUNT(*) FROM messages WHERE session_id=?",
@@ -103,8 +121,14 @@ class MemoryStore:
                         (title, session_id),
                     )
 
-    def delete_session(self, session_id: str) -> None:
+    def delete_session(self, session_id: str, user_email: str = "") -> None:
         with sqlite3.connect(self.path) as c:
+            # Only delete if owned by this user.
+            owner = c.execute(
+                "SELECT user_email FROM sessions WHERE id=?", (session_id,)
+            ).fetchone()
+            if not owner or owner[0] != user_email:
+                return
             c.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM sessions WHERE id=?", (session_id,))
 

@@ -57,3 +57,31 @@ def test_history_trigger_phrases():
     # Spot-check the key ones.
     assert "history" in "go back to the history".lower()
     assert "what did we discuss" in "what did we discuss yesterday".lower()
+
+
+def test_user_isolation():
+    """Two users get separate sessions and memories (v0.11.0)."""
+    import tempfile
+    from pathlib import Path
+
+    from app.memory import MemoryStore
+
+    with tempfile.TemporaryDirectory() as d:
+        m = MemoryStore(Path(d) / "test.db")
+        alice = m.create_session("alice@example.com", "Alice chat")
+        bob = m.create_session("bob@example.com", "Bob chat")
+
+        m.add_message(alice, "user", "hi alice")
+        m.add_message(bob, "user", "hi bob")
+
+        # Each user sees only their own sessions.
+        assert [s["id"] for s in m.list_sessions("alice@example.com")] == [alice]
+        assert [s["id"] for s in m.list_sessions("bob@example.com")] == [bob]
+
+        # Cannot read another user's session.
+        assert m.get_messages(alice, "bob@example.com") == []
+        assert m.get_messages(bob, "alice@example.com") == []
+
+        # Cannot delete another user's session.
+        m.delete_session(alice, "bob@example.com")
+        assert len(m.list_sessions("alice@example.com")) == 1

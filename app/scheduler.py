@@ -34,7 +34,7 @@ from . import cron as cron_mod
 from .rag import build_rag_messages, verify_citations
 from .skills import match_skill, scan_skills
 
-JOB_TYPES = ("briefing", "reminder")
+JOB_TYPES = ("briefing", "reminder", "background_task")
 
 
 class JobDefinitionError(ValueError):

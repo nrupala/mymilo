@@ -1,13 +1,89 @@
 # MyMilo
 
-**MyMilo** — Nrupal's native town-like buddy: the resident interface of his
-personal agentic OS. One product, two layers: the OS (sovereign memory,
-persona/state, orchestrator, connectors) underneath; MyMilo as its face —
-the buddy that runs routines, holds conversations, and talks to him. Local
-first, on his hardware, no credits.
+**mymilo** — Nrupal Akolkar's personal phone assistant and agentic OS
+resident. A FastAPI backend with an Apple-quality chat UI, an MCP server
+so other agents can call it, a file-based escalation queue to Wright
+(the human's builder agent), dual episodic + semantic memory, a
+priority-ordered context builder, 73 drop-a-file skills, and
+privacy-first Gmail/Calendar/Cloudflare/GitHub integrations.
 
-Constitution: [SPEC.md](SPEC.md) · Build: [ARCHITECTURE.md](ARCHITECTURE.md) ·
-Plan: [ROADMAP.md](ROADMAP.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+Local-first, on his own hardware, multi-user (Nrupal + Natasha),
+no credits. Named "milo" between Nrupal and Wright.
+
+> Owned by Nrupal Akolkar · Built with Muse by Meta
+
+**License:** AGPL-3.0-or-later — see [LICENSE](LICENSE), [NOTICE](NOTICE),
+and [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md) for the commercial
+license option. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) ·
+History: [CHANGELOG.md](CHANGELOG.md).
+
+## Features
+
+- **Chat UI** — Apple-quality web chat (`templates/`, `static/`), OpenAI-compatible
+  `/v1/chat/completions`, per-user sessions via Cloudflare Access email identity.
+- **MCP server (Phase 1)** — SSE at `/mcp/sse` + `/mcp/messages`; 27 tools
+  (19 core: chat, retrieve, documents, jobs, ledger, skills, …; 3 GitHub;
+  3 Cloudflare; 2 Gmail/Calendar). Machine-readable surface at
+  `/v1/mcp/tools` and `/.well-known/mymilo.json`.
+- **Escalation queue (Phase 2)** — file-based Milo→Wright queue at
+  `data/escalations/`; per-turn detection routes hard tasks to Wright mid-chat.
+- **Episodic memory** — keyword search over past sessions; episode summaries
+  injected into chat context.
+- **Semantic memory** — durable facts extracted from conversation
+  (`/v1/profile`); user-deletable.
+- **Unified context builder** — system, skill, episodic, RAG, and history
+  assembled in priority order under a token budget.
+- **73 skills** — drop-a-file `skills/*/SKILL.md` with trigger phrases;
+  matched deterministically, always-on; vector rescan at `/v1/skills/rescan`.
+- **Integrations** — GitHub (live, 81 repos), Gmail/Calendar (privacy-first:
+  connect per task, disconnect after, no retention), Cloudflare (zones, DNS,
+  Workers).
+- **Multi-user** — separate sessions and memory per user.
+- **Background jobs** — cron-scheduled job types (briefing, reminder,
+  background_task), consent-gated actions, planner suggestions outbox.
+- **Fleet economics** — per-route cost ledger and quota flags
+  (`/v1/ledger/summary`).
+
+## Architecture
+
+```
+                    +------------------- Cloudflare Access -------------------+
+                    |  https://mymilo.aimlds.org  (tunnel -> 127.0.0.1:7071)  |
+                    +---------------------------+---------------------------+
+                                                |
+                                        +-------v--------+
+                                        |  app/main.py   |  FastAPI
+                                        |  (routes, UI,  |
+                                        |   MCP SSE)     |
+                                        +---+---+---+----+
+                                            |   |   |
+                +---------------------------+   |   +-----------------------+
+                |                               |                           |
+        +-------v--------+            +---------v----------+      +---------v----------+
+        | Model router   |            | Context builder    |      | Escalation queue   |
+        | local (llama   |            | (priority-ordered,  |      | data/escalations/  |
+        | .cpp) / cloud  |            | budget-trimmed)     |      | -> Wright          |
+        +-------+--------+            +---------+----------+      +--------------------+
+                |                               |
+        +-------v--------+            +---------v----------+
+        | Memory         |            | Skills (73)        |
+        | episodic +     |            | trigger-matched    |
+        | semantic facts |            | drop-a-file        |
+        +----------------+            +------------------+
+                |
+        +-------v--------+
+        | Integrations   |
+        | GitHub, Gmail, |
+        | Calendar, CF   |
+        +----------------+
+```
+
+Key modules: `app/main.py` (FastAPI app, chat, sessions, MCP SSE,
+escalation), `app/mcp_server.py` (27-tool catalog), `app/memory.py`
+(episodic), `app/semantic.py` (facts + profile), `app/context_builder.py`
+(context assembly), `app/skills.py` (73 skills), `app/router.py` (model
+routing), `app/scheduler.py` + `app/jobs.py` (background jobs),
+`app/integrations/{github,gmail,calendar,cloudflare}.py`.
 
 ## Quickstart
 
@@ -24,7 +100,37 @@ Point the default `local` route at llama.cpp:
 llama-server -m <model.gguf> --port 8080
 ```
 
-Open http://127.0.0.1:8090 for the chat UI, `/jobs` for job definitions.
+Open http://127.0.0.1:8090 for the chat UI.
+
+**Note:** the production box serves on `127.0.0.1:7071` behind a
+Cloudflare tunnel; the repo default is `127.0.0.1:8090`.
+
+## Build
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+CI-faithful check in a clean venv (required before pushing — the ambient
+dev env may hide missing deps):
+
+```bash
+python -m venv /tmp/civenv && source /tmp/civenv/bin/activate
+pip install --no-cache-dir -e ".[dev]"
+ruff check app tests && ruff format --check app tests && python -m pytest -q
+```
+
+## Test
+
+```bash
+python -m pytest -q                 # full suite (MockTransport — no network)
+python -m pytest tests/test_memory.py -q   # one module
+```
+
+Behavior verification (real HTTP against a stub backend) — see
+[CONTRIBUTING.md](CONTRIBUTING.md); "verified" means observed behavior,
+never files-present.
 
 ## Usage
 
@@ -38,77 +144,83 @@ curl localhost:8090/v1/chat/completions -H 'Content-Type: application/json' -d '
   "messages": [{"role": "user", "content": "Hello, Milo."}]
 }'
 
-# routines (Phase 3): typed payloads, cron scheduling, planner + consent-gated actions
-curl localhost:8090/v1/jobs
-curl -X POST localhost:8090/v1/jobs -H 'Content-Type: application/json' -d '{
-  "name": "morning-briefing", "cron": "0 7 * * *",
-  "payload": {"type": "briefing", "query": "what needs attention", "top_k": 5}
-}'
-curl -X POST localhost:8090/v1/jobs -H 'Content-Type: application/json' -d '{
-  "name": "water-plants", "cron": "0 18 * * *",
-  "payload": {"type": "reminder", "text": "Water the plants."}
-}'
-curl -X POST localhost:8090/v1/jobs/<id>/trigger   # run now
-curl localhost:8090/v1/suggestions                  # planner outbox
+# sessions (per-user; email identity from Cloudflare Access)
+curl -X POST localhost:8090/v1/sessions
+curl localhost:8090/v1/sessions
 
-# fleet economics (Phase 4): per-call ledger, quota flags, route ranking
-curl localhost:8090/v1/ledger/summary               # per-route monthly cost + quota %
-curl localhost:8090/v1/routes                       # cost metadata, live spend, cheapest-first rank
-
-# platform (Phase 5): skills, persona, agent surfaces
-curl localhost:8090/v1/skills                       # drop-a-file skills
-curl -X POST localhost:8090/v1/skills/rescan        # pick up added/changed/removed skills
-curl localhost:8090/v1/persona
+# MCP surface: tools list as data, SSE endpoint for agents
+curl localhost:8090/v1/mcp/tools            # 27 tools
 curl localhost:8090/.well-known/mymilo.json
-curl localhost:8090/llms.txt
-curl localhost:8090/v1/mcp/tools                    # 19-tool MCP surface as data
 
-# documents: upload, list, retrieve (Phase 2)
+# semantic memory: facts profile
+curl localhost:8090/v1/profile
+curl -X DELETE localhost:8090/v1/profile/facts/<fact_id>
+
+# skills: list, rescan
+curl localhost:8090/v1/skills
+curl -X POST localhost:8090/v1/skills/rescan
+
+# background jobs + planner
+curl localhost:8090/v1/jobs
+curl -X POST localhost:8090/v1/jobs/<id>/trigger
+curl localhost:8090/v1/suggestions
+
+# documents: upload, retrieve (RAG)
 curl -X POST localhost:8090/v1/documents -F "file=@report.pdf"
-curl localhost:8090/v1/documents
 curl -X POST localhost:8090/v1/retrieve -H 'Content-Type: application/json' -d '{
   "query": "seal replacement interval", "top_k": 5
 }'
 
-# RAG chat: set "rag": {"enabled": true} — answer cites (source: file, chunk N)
-curl localhost:8090/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model": "local",
-  "messages": [{"role": "user", "content": "What is the seal interval?"}],
-  "rag": {"enabled": true, "top_k": 5}
+# export a session
+curl -X POST localhost:8090/v1/export -H 'Content-Type: application/json' -d '{
+  "session_id": "<id>", "format": "md"
 }'
 ```
 
 Embeddings default to llama.cpp's `/embeddings` endpoint — run it with an
 embedding model, e.g. `llama-server -m nomic-embed-text.gguf --embedding
 --port 8080`. See `config/mymilo.example.toml` (`[embeddings]`) and
-`evals/README.md` for the eval story.
+`evals/README.md`.
 
 ## Configuration
 
-`config/mymilo.toml` (TOML) with env overrides: `MYMILO_CONFIG`,
-`MYMILO_HOST`, `MYMILO_PORT`, `MYMILO_DB`, `MYMILO_TIMEOUT`. API keys come
-from the environment only (see `api_key_env` + `vault/README.md`) — never
-from the config file, never from the repo.
+`config/mymilo.toml` (TOML). Env overrides win over file values.
+
+| Env var | Purpose |
+|---|---|
+| `MYMILO_CONFIG` | Path to TOML config (default `config/mymilo.toml`) |
+| `MYMILO_HOST` / `MYMILO_PORT` | Bind host/port |
+| `MYMILO_DB` | SQLite path |
+| `MYMILO_TIMEOUT` | Request timeout (s) |
+| `MYMILO_VAULT_PATH` | Secrets vault directory |
+| `MYMILO_SKILLS_DIR` | Skills directory (default `skills`) |
+| `MYMILO_SCHEDULER_ENABLED` / `MYMILO_SCHEDULER_TICK` | Background scheduler |
+| `MYMILO_OS_ENDPOINT` | AxiomSpine/OS endpoint |
+| `MYMILO_EXA_API_KEY` | Exa web-search key |
+| `MYMILO_CLOUD_API_KEY` | Cloud model key (e.g. OpenRouter) |
+| `GITHUB_TOKEN` | GitHub integration token |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare integration token |
+
+API keys come from the environment only — never from the config file,
+never from the repo. See `vault/README.md`.
 
 ## Layout
 
 ```
-app/         FastAPI: main, config, router, schemas, db, jobs
-templates/   Jinja2 UI (chat, jobs) — every endpoint ships an interface
-static/      local stylesheet, zero external deps
-config/      example TOML
-vault/       git-ignored secrets (convention doc only)
-tests/       pytest suite (MockTransport — no network)
+app/           FastAPI: main, config, router, schemas, db, jobs, memory,
+               semantic, context_builder, skills, mcp_server, integrations
+mcp/           MCP tool catalog JSON (19 core + github + gmail/calendar + cf)
+skills/        73 drop-a-file skills (SKILL.md each)
+templates/     Jinja2 UI (chat, jobs)
+static/        local stylesheet, zero external deps
+config/        example TOML
+vault/         git-ignored secrets (convention doc only)
+tests/         pytest suite (MockTransport — no network)
+evals/         retrieval evals
+docs/          design notes
 ```
-
-## Status
-
-**Now:** Phase 2 retrieval — document ingestion, llama.cpp embeddings,
-cosine search, RAG chat with citation verification, evals.
-**Next:** Phase 3 proactive engine (deterministic planner, consent-gated
-actions, scheduler/digest design — maven transfers).
-**Then:** fleet economics, OS platform layer.
 
 ## License
 
 AGPL-3.0-or-later. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Commercial use without AGPL obligations: [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md).

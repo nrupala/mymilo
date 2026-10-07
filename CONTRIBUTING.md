@@ -16,6 +16,21 @@ ruff check app tests && ruff format --check app tests && python -m pytest -q
 
 CI runs install → lint → format → test on every push/PR. Warnings are errors.
 
+**CI-faithful venv rule:** CI installs `.[dev]` into a bare runner — a
+dependency that only exists incidentally in your ambient dev env passes
+locally and fails CI. After dependency changes, reproduce in a clean venv
+before pushing:
+
+```bash
+python -m venv /tmp/civenv && source /tmp/civenv/bin/activate
+pip install --no-cache-dir -e ".[dev]"
+ruff check app tests && ruff format --check app tests && python -m pytest -q
+```
+
+**Green-merge rule:** merge only when CI is green on the PR's exact head
+SHA. Never merge red. Wright may merge under Nrupal's standing grant;
+otherwise Nrupal merges.
+
 ## Behavior verification
 
 Unit tests use `httpx.MockTransport` (no network). Before claiming anything

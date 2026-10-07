@@ -29,6 +29,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -71,6 +72,7 @@ from .schemas import (
     ConsentGrant,
     Document,
     DocumentUploadResponse,
+    ExportRequest,
     JobCreate,
     JobRun,
     JobUpdate,
@@ -149,6 +151,11 @@ def create_app(
     router = ModelRouter(settings, transport=transport, ledger=ledger_recorder)
     jobs = JobService(db)
     docs = DocumentService(db, embedder or build_embedder(settings, transport))
+
+    # ── v0.10.0: session memory spine ──────────────────────────
+    from .memory import MemoryStore
+
+    memory = MemoryStore(Path(settings.db_path).parent / "memory.db")
 
     # ── Phase 3: proactive engine (continued) ──────────────────
     # Event bus -> deterministic planner -> consent-gated actions.
@@ -332,6 +339,93 @@ def create_app(
             "routes": router.route_stats(),
         }
 
+    @app.post("/v1/export")
+    async def export_chat(req: ExportRequest):
+        """Export chat messages to md, docx, html, or csv."""
+        from .export import (
+            extract_tables,
+            tables_to_csv,
+            to_docx,
+            to_html,
+            to_markdown,
+        )
+
+        messages = [m.model_dump() for m in req.messages]
+        fmt = req.format.lower()
+
+        if fmt == "md":
+            content = to_markdown(messages)
+            return Response(
+                content=content,
+                media_type="text/markdown",
+                headers={"Content-Disposition": "attachment; filename=milo-export.md"},
+            )
+        elif fmt == "html":
+            content = to_html(messages)
+            return Response(
+                content=content,
+                media_type="text/html",
+                headers={
+                    "Content-Disposition": "attachment; filename=milo-export.html"
+                },
+            )
+        elif fmt == "docx":
+            content = to_docx(messages)
+            return Response(
+                content=content,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={
+                    "Content-Disposition": "attachment; filename=milo-export.docx"
+                },
+            )
+        elif fmt == "csv":
+            # Extract tables from assistant messages.
+            all_text = "\n\n".join(
+                m.get("content", "") for m in messages if m.get("role") == "assistant"
+            )
+            tables = extract_tables(all_text)
+            if not tables:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No tables found in the conversation to export.",
+                )
+            content = tables_to_csv(tables)
+            return Response(
+                content=content,
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=milo-export.csv"},
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown format '{fmt}'. Use md, docx, html, or csv.",
+            )
+
+    # ── v0.10.0: session memory endpoints ──────────────────────
+    @app.get("/v1/sessions")
+    async def list_sessions():
+        return {"sessions": memory.list_sessions()}
+
+    @app.post("/v1/sessions")
+    async def create_session():
+        sid = memory.create_session()
+        return {"id": sid}
+
+    @app.get("/v1/sessions/{session_id}")
+    async def get_session(session_id: str):
+        msgs = memory.get_messages(session_id)
+        if not msgs:
+            # Could be empty or nonexistent; list to check.
+            ids = [s["id"] for s in memory.list_sessions(limit=1000)]
+            if session_id not in ids:
+                raise HTTPException(status_code=404, detail="Session not found")
+        return {"id": session_id, "messages": msgs}
+
+    @app.delete("/v1/sessions/{session_id}")
+    async def delete_session(session_id: str):
+        memory.delete_session(session_id)
+        return {"deleted": session_id}
+
     @app.get("/v1/models", response_model=ModelList)
     async def list_models():
         models = [ModelInfo(id=m.name) for m in settings.models]
@@ -392,7 +486,19 @@ def create_app(
         # with that repo's methodology. Independent of the opt-in RAG.
         active_skill: str | None = None
         skill = match_skill(req.messages[-1].content, app.state.skills_dir)
+
+        # ── v0.10.0: session memory ──────────────────────────────
+        # Load recent turns for context; save this turn afterwards.
+        # Auto-create a session if the client didn't send one.
+        session_id = req.session_id or memory.create_session()
+        history = memory.recent_context(session_id, max_turns=10)
         messages = [m.model_dump() for m in req.messages]
+        # Insert history after any leading system messages.
+        insert_at = 0
+        while insert_at < len(messages) and messages[insert_at].get("role") == "system":
+            insert_at += 1
+        messages[insert_at:insert_at] = history
+        memory.add_message(session_id, "user", user_text)
         # Current date: models have training cutoffs; grounding them in
         # today prevents "stuck in 2024" answers.
         from datetime import UTC, datetime
@@ -483,6 +589,17 @@ def create_app(
             data["citation_check"] = citation_check
         if active_skill:
             data["active_skill"] = active_skill
+        # ── v0.10.0: save assistant reply to session memory ──
+        if session_id:
+            try:
+                reply = (
+                    data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                )
+                if reply:
+                    memory.add_message(session_id, "assistant", reply)
+                data["session_id"] = session_id
+            except Exception:
+                pass
         return JSONResponse(content=data)
 
     # ── documents ────────────────────────────────────────────

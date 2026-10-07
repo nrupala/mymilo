@@ -25,6 +25,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: float = 1.0
     stream: bool = False
     rag: RAGParams = Field(default_factory=RAGParams)
+    session_id: str | None = None
 
 
 class JobCreate(BaseModel):
@@ -38,6 +39,13 @@ class JobUpdate(BaseModel):
     cron: str | None = None
     status: str | None = None
     payload: dict | None = None
+
+
+class ExportRequest(BaseModel):
+    """Export chat messages to a file. Format: md, docx, html, csv."""
+
+    messages: list[ChatMessage]
+    format: str = "md"
 
 
 class Job(BaseModel):

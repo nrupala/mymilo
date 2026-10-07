@@ -11,16 +11,7 @@
     <label class="docs-toggle" title="Retrieve relevant document chunks and cite them">
       <input type="checkbox" id="userag"> Docs
     </label>
-    <div class="export-menu">
-      <button id="exportBtn" type="button" title="Export this chat" aria-label="Export">⤓</button>
-      <div id="exportDrop" class="export-drop" hidden>
-        <button type="button" data-fmt="md">Markdown (.md)</button>
-        <button type="button" data-fmt="html">Web page (.html)</button>
-        <button type="button" data-fmt="docx">Word (.docx)</button>
-        <button type="button" data-fmt="csv">Spreadsheet (.csv)</button>
-      </div>
-    </div>
-    <button id="clear" title="Clear chat" aria-label="Clear chat">🗑</button>
+    <button id="clear" title="New chat" aria-label="New chat">＋</button>
   </div>
   <div id="log" class="log" aria-live="polite"></div>
   <form id="form" class="composer">
@@ -59,6 +50,28 @@ function addMsg(role, text) {
   const body = document.createElement('div');
   body.className = 'body'; body.textContent = text;
   d.append(who, body);
+  // Per-message actions (like ChatGPT/Claude): copy + export this message.
+  if (role === 'assistant' && text !== '…') {
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button'; copyBtn.className = 'icon-btn';
+    copyBtn.title = 'Copy'; copyBtn.textContent = '⧉';
+    copyBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); copyBtn.textContent = '✓'; }
+      catch (e) { copyBtn.textContent = '✕'; }
+      setTimeout(() => { copyBtn.textContent = '⧉'; }, 1200);
+    });
+    const expBtn = document.createElement('button');
+    expBtn.type = 'button'; expBtn.className = 'icon-btn';
+    expBtn.title = 'Export this answer'; expBtn.textContent = '⤓';
+    expBtn.addEventListener('click', async () => {
+      const fmt = await pickFormat();
+      if (fmt) exportChat(fmt, [{role, content: text}]);
+    });
+    actions.append(copyBtn, expBtn);
+    d.appendChild(actions);
+  }
   log.appendChild(d);
   log.scrollTop = log.scrollHeight;
 }
@@ -227,18 +240,15 @@ document.getElementById('sessionSel').addEventListener('change', async (e) => {
   } catch (err) { addMsg('assistant', 'Could not load chat history.'); }
 });
 
-// ── Export UI (dropdown) ─────────────────────────────────────
-const exportBtn = document.getElementById('exportBtn');
-const exportDrop = document.getElementById('exportDrop');
-exportBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  exportDrop.hidden = !exportDrop.hidden;
-});
-document.addEventListener('click', () => { exportDrop.hidden = true; });
-exportDrop.addEventListener('click', (e) => { e.stopPropagation(); });
-async function exportChat(fmt) {
-  const msgs = window.chatMessages || [];
+// ── Export (per-message + full chat) ─────────────────────────
+async function exportChat(fmt, msgs) {
+  msgs = msgs || window.chatMessages || [];
   if (!msgs.length) { alert('Nothing to export yet.'); return; }
+  // Format picker for full-chat export.
+  if (!msgs._single && !fmt._chosen) {
+    fmt = await pickFormat();
+    if (!fmt) return;
+  }
   try {
     const r = await fetch('/v1/export', {
       method: 'POST',
@@ -261,11 +271,36 @@ async function exportChat(fmt) {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   } catch (e) { alert('Export failed: ' + e.message); }
 }
-exportDrop.querySelectorAll('button[data-fmt]').forEach(b => {
-  b.addEventListener('click', () => {
-    exportDrop.hidden = true;
-    exportChat(b.dataset.fmt);
+// Small format picker sheet (Apple-style action sheet).
+function pickFormat() {
+  return new Promise((resolve) => {
+    const sheet = document.createElement('div');
+    sheet.className = 'format-sheet';
+    sheet.innerHTML = `
+      <div class="sheet-card">
+        <div class="sheet-title">Export chat as</div>
+        <button data-fmt="md">Markdown (.md)</button>
+        <button data-fmt="html">Web page (.html)</button>
+        <button data-fmt="docx">Word (.docx)</button>
+        <button data-fmt="csv">Spreadsheet (.csv)</button>
+        <button class="sheet-cancel">Cancel</button>
+      </div>`;
+    const done = (fmt) => { sheet.remove(); resolve(fmt || null); };
+    sheet.addEventListener('click', (e) => {
+      if (e.target === sheet) return done(null);
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.classList.contains('sheet-cancel')) return done(null);
+      done(b.dataset.fmt);
+    });
+    document.body.appendChild(sheet);
   });
-});
+}
+// Toolbar: full-chat export button.
+const fullExportBtn = document.createElement('button');
+fullExportBtn.type = 'button'; fullExportBtn.className = 'icon-btn';
+fullExportBtn.title = 'Export full chat'; fullExportBtn.textContent = '⤓';
+fullExportBtn.addEventListener('click', () => exportChat(null));
+document.querySelector('.chat-toolbar').appendChild(fullExportBtn);
 </script>
 {% endblock %}

@@ -121,12 +121,18 @@ if (!SpeechRec) {
   };
   micBtn.addEventListener('click', () => {
     if (wantRec) { wantRec = false; if (rec) rec.stop(); return; }
-    baseText = input.value ? input.value.replace(/\s+$/, '') + ' ' : '';
-    input.value = baseText;
+    // Fresh dictation = fresh input. Clear any leftover text.
+    input.value = '';
+    baseText = '';
     wantRec = true;
     micBtn.classList.add('rec');
     micBtn.textContent = '⏹';
     startRec();
+  });
+  // Stop dictation and reset when the message is sent.
+  form.addEventListener('submit', () => {
+    if (wantRec) { wantRec = false; if (rec) try { rec.stop(); } catch (e) {} }
+    baseText = '';
   });
 }
 

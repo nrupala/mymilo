@@ -23,7 +23,7 @@ def test_models_list(client):
     assert r.status_code == 200
     body = r.json()
     assert body["object"] == "list"
-    assert [m["id"] for m in body["data"]] == ["stub"]
+    assert [m["id"] for m in body["data"]] == ["auto", "stub"]
 
 
 def test_index_page_renders(client):

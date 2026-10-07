@@ -32,7 +32,7 @@ from typing import Any
 
 from . import cron as cron_mod
 from .rag import build_rag_messages, verify_citations
-from .skills import scan_skills
+from .skills import match_skill, scan_skills
 
 JOB_TYPES = ("briefing", "reminder")
 
@@ -117,6 +117,8 @@ def make_job_executor(deps: dict[str, Any]):
                 summary = await _run_briefing(db, job, payload, deps)
             elif job_type == "reminder":
                 summary = _run_reminder(payload)
+            elif job_type == "background_task":
+                summary = await _run_background_task(db, job, payload, deps)
             else:
                 raise ValueError(f"unknown job type {job_type!r}")
             db.finish_run(run_id, "completed", result_summary=summary)
@@ -207,6 +209,46 @@ async def _run_briefing(
     if not check["ok"]:
         answer += " (citation check flagged unresolved references)"
     return answer
+
+async def _run_background_task(
+    db: Any,
+    job: dict[str, Any],
+    payload: dict[str, Any],
+    deps: dict[str, Any],
+) -> str:
+    """Run a background research/analysis task from chat.
+
+    Applies skill triggers, routes to the right model, and returns the
+    answer. The result is stored in the job run for the chat UI to pick up.
+    """
+    from .orchestrate import plan_steps, route_for_complexity
+
+    task = payload.get("task", "")
+    requested_model = payload.get("model")
+    settings = deps["settings"]
+
+    # Route: explicit model wins, else auto by complexity.
+    model = requested_model or route_for_complexity(task, settings)
+
+    # Skill context (same trigger matching as chat).
+    skills_dir = deps.get("skills_dir")
+    messages: list[dict[str, str]] = []
+    if skills_dir:
+        skill = match_skill(task, skills_dir)
+        if skill:
+            messages.append({"role": "system", "content": skill["content"]})
+    messages.append({"role": "user", "content": task})
+
+    # v1: single-step. plan_steps returns the decomposition for v0.9.
+    steps = plan_steps(task)
+    answers = []
+    for _step in steps:
+        data = await deps["router"].chat_completion(model, {"messages": messages})
+        answer = (
+            data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        )
+        answers.append(answer)
+    return "\n\n".join(answers)
 
 
 # ----------------------------------------------------------------------

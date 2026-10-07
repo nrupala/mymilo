@@ -84,3 +84,20 @@ poll_seconds = 300.0
 # var inside this dir are the fallback. See docs/vault-alignment.md.
 [vault]
 # path = "vault"
+
+# ── Cloud brains (v0.8.0) ──────────────────────────────────────
+# Uncomment and set the API key via env var or vault file (never in this file).
+# [[models]]
+# name = "deepseek"
+# base_url = "https://api.deepseek.com/v1"
+# api_key_env = "MYMILO_DEEPSEEK_API_KEY"
+# timeout_s = 120.0
+# input_usd_per_1k = 0.00014
+# output_usd_per_1k = 0.00028
+#
+# [[models]]
+# name = "openrouter"
+# base_url = "https://openrouter.ai/api/v1"
+# api_key_env = "MYMILO_OPENROUTER_API_KEY"
+# timeout_s = 120.0
+# # Rates vary by model; set your chosen model's rates here.

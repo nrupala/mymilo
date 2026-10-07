@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0 — 2026-10-06
+- Cloud brains: DeepSeek and OpenRouter routes in config (disabled until API
+  key via env var or vault file). Model picker shows them when configured.
+- Auto-routing: new "auto" model (now the default) picks local for simple
+  queries, cloud for complex ones (long, multi-question, research signals).
+  Falls back to local when no cloud key is set. Response includes
+  `routed_model`.
+- Background tasks: say "in the background" / "take your time" and Milo
+  creates a background job, runs it via the scheduler, and the result lands
+  in the job run. New `background_task` job type with skill triggers and
+  model routing.
+- Orchestration: `app/orchestrate.py` — trigger detection, complexity
+  routing, step planner (v1 sequential; smarter decomposition in v0.9).
+
 ## 0.7.0 — 2026-10-06
 - Skills from all repos: 13 repo capabilities now live as Milo skills
   (stock-analysis, electrical-code, read-aloud, verified-code,

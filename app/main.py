@@ -541,7 +541,12 @@ def create_app(
                         "knowledge'). When web search results are provided, "
                         "cite them by number [1], [2]. Never invent sources "
                         "or URLs. You DO have web search available — never "
-                        "claim you cannot browse the internet."
+                        "claim you cannot browse the internet. "
+                        "Escalation: when a request needs deep research, "
+                        "complex analysis, code changes, or anything beyond "
+                        "quick answers, say 'Let me get Wright on this' and "
+                        "explain what you'll have him do. You have a Wright "
+                        "who handles the heavy lifting."
                     ),
                 },
             )

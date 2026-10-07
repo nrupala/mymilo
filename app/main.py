@@ -206,6 +206,18 @@ def create_app(
     app.state.docs = docs
     app.state.skills_dir = skills_dir
     app.state.last_skill_scan = 0.0
+
+    # ── v0.13.0: MCP server (Phase 1 agentic) ────────────────────
+    # Exposes Milo's tools via Model Context Protocol for agent-to-agent calls.
+    try:
+        from .mcp_server import create_mcp_router
+
+        mcp_dir = Path(__file__).parent.parent / "mcp"
+        if not mcp_dir.exists():
+            mcp_dir = Path("/opt/mymilo/mcp")
+        app.include_router(create_mcp_router(mcp_dir, lambda: app.state))
+    except Exception:  # noqa: BLE001 — MCP is additive, never break the app
+        pass
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

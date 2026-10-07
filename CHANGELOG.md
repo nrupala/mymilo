@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.23.1 — 2026-10-07
+- Startup hang fixed: the skill scan (`scan_skills`) blocked startup and
+  hung with 73 skills; it now runs in the background via
+  `asyncio.create_task`. Skills work via file matching immediately; the
+  vector index builds async.
+
+## 0.23.0 — 2026-10-07
+- Semantic memory: durable facts extracted from conversation
+  (`app/semantic.py` — name, location, preferences, spouse patterns),
+  stored per user, grouped by category. `GET /v1/profile` returns the
+  profile for UI; `DELETE /v1/profile/facts/{fact_id}` removes a fact.
+
+## 0.22.0 — 2026-10-07
+- Unified context builder (`app/context_builder.py`): system prompt,
+  skill instructions, episodic memory, RAG docs, history, and user
+  message assembled in priority order under a token budget, with
+  budget-aware trimming.
+
+## 0.21.0 — 2026-10-07
+- Episodic memory (`app/episodic.py`): keyword search over past sessions;
+  extractive episode summaries injected into chat context.
+
+## 0.20.0 — 2026-10-07
+- Per-turn escalation (`app/escalation_turn.py`): Milo auto-detects
+  mid-chat when a request needs Wright and queues an escalation.
+  Model-context budget foundation.
+
+## 0.19.0 — 2026-10-07
+- 57 Town skills ported unchanged from `nrupala/milo-skill-map`
+  (73 skills total: 16 core + 57 Town).
+
+## 0.18.0 — 2026-10-07
+- Cloudflare integration (`app/integrations/cloudflare.py`): zones, DNS,
+  Workers read tools; 27 MCP tools. Writes need confirmation.
+  Needs `CLOUDFLARE_API_TOKEN`.
+
+## 0.17.0 — 2026-10-07
+- Gmail + Calendar integration (`app/integrations/gmail.py`,
+  `app/integrations/calendar.py`): privacy-first — connect per task,
+  disconnect after, no retention. 24 MCP tools.
+
+## 0.16.0 — 2026-10-07
+- `milo-inc-os` and `aiorg-sdse` skills (COO patterns, SDSE methodology).
+
+## 0.15.1 — 2026-10-07
+- Fixed `/v1/mcp/tools` to include the GitHub tools (22 total).
+
+## 0.15.0 — 2026-10-07
+- GitHub integration (`app/integrations/github.py`): `github_list_repos`,
+  `github_list_issues`, `github_list_prs` MCP tools.
+
+## 0.14.0 — 2026-10-07
+- Phase 2 escalation: Milo→Wright via file-based queue at
+  `data/escalations/`; MCP `escalate` method; system prompt guides Milo
+  to escalate complex tasks.
+
+## 0.13.0 — 2026-10-07
+- Phase 1 MCP server: SSE at `/mcp/sse` + `/mcp/messages`; 19 tools via
+  `tools/list` (calls stubbed in Phase 1).
+
+## 0.12.3 — 2026-10-06
+- Skills route to the cloud route (deepseek/openrouter) instead of local
+  Phi-4-mini; broader stock-analysis triggers.
+
+## 0.12.2 — 2026-10-06
+- Dictation text clears correctly on submit (iPhone fix).
+
+## 0.12.1 — 2026-10-06
+- Apple-quality CSS pass; MyMilo branding; iPhone dictation hardening.
+
+## 0.11.0 — 2026-10-06
+- Per-user sessions: separate Nrupal/Natasha sessions and memory, keyed
+  by Cloudflare Access email identity. Helpful default system prompt;
+  source-honesty prompt.
+
 ## 0.8.0 — 2026-10-06
 - Cloud brains: DeepSeek and OpenRouter routes in config (disabled until API
   key via env var or vault file). Model picker shows them when configured.

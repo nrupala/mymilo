@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Nrupal Akolkar
 """In-process event bus.
 
 Events are plain dicts with a ``type`` key. The bus is synchronous and

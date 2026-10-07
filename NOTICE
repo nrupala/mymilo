@@ -7,3 +7,34 @@ This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU Affero General Public License as published by
 the Free Software Foundation, version 3 or later. See LICENSE for the
 full text.
+
+A commercial license is available for parties who wish to use this
+software in proprietary products without AGPL obligations. See
+COMMERCIAL-LICENSING.md.
+
+Third-party dependencies (runtime):
+
+- FastAPI — MIT License
+- uvicorn — BSD 3-Clause License
+- httpx — BSD 3-Clause License
+- pydantic — MIT License
+- Jinja2 — BSD 3-Clause License
+- numpy — BSD 3-Clause License
+- anyio — MIT License
+- python-multipart — Apache-2.0 License
+- python-docx — MIT License
+
+Development/testing dependencies:
+
+- pytest — MIT License
+- ruff — MIT License
+
+Optional retrieval extras:
+
+- sentence-transformers — Apache-2.0 License
+- pymupdf — AGPL-3.0 / commercial (Artifex)
+- beautifulsoup4 — MIT License
+- markdown — BSD 3-Clause License
+
+License texts for these packages are available from their respective
+PyPI project pages and repositories.

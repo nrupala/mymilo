@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Nrupal Akolkar
 """Minimal cron expression parser and matcher.
 
 Supports the standard 5-field form::

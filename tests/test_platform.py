@@ -142,10 +142,12 @@ def test_skill_indexed_on_startup(skills_client):
     assert s["version"] == "3"
 
 
-def test_skill_searchable_via_retrieve(skills_client):
+def test_skill_not_in_general_retrieve(skills_client):
+    # Skills are trigger-matched in chat, not vector-searched. They must not
+    # pollute document retrieval.
     c, _ = skills_client
     hits = c.post("/v1/retrieve", json={"query": "thing", "top_k": 5}).json()["hits"]
-    assert any("Demo" in h["text"] for h in hits)
+    assert not any("demo.md" in h.get("filename", "") for h in hits)
 
 
 def test_skill_update_and_remove(skills_client):

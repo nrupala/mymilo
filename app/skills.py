@@ -9,15 +9,22 @@ a ``SKILL.md`` with frontmatter::
     name: morning-briefing
     description: Drafts the morning briefing from indexed documents.
     version: 1
+    triggers: morning briefing, daily briefing
     ---
     # Morning briefing
     ...instructions...
 
-The scanner ingests each skill as a document tagged ``skill:<name>`` so
-skills are searchable through the same retrieval machinery as everything
-else. New/changed/deleted files are picked up on startup, on demand
-(``POST /v1/skills/rescan``), and periodically while the scheduler runs
-(``[skills] poll_seconds`` — mtime/sha polling, no watchdog dependency).
+Skills activate by trigger matching: the chat endpoint checks the user's
+message against each skill's ``triggers`` (case-insensitive) and prepends
+the first match's instructions as a system message. Trigger matching is
+always-on and independent of the "Use documents" RAG toggle.
+
+The scanner ingests each skill as a document tagged ``skill:<name>`` for
+bookkeeping, but skills are EXCLUDED from vector search so they never
+pollute document retrieval. New/changed/deleted files are picked up on
+startup, on demand (``POST /v1/skills/rescan``), and periodically while
+the scheduler runs (``[skills] poll_seconds`` — mtime/sha polling, no
+watchdog dependency).
 
 One convention with the Skill Foundry idea, not two.
 """

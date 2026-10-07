@@ -343,7 +343,7 @@ delChatBtn.addEventListener('click', async () => {
     if (!r.ok) { alert('Delete failed: ' + r.status); return; }
     window.chatMessages = [];
     currentSessionId = null;
-    document.querySelector('.chat-messages').innerHTML = '';
+    log.innerHTML = '';
     addMsg('assistant', 'Chat deleted. Starting fresh — what can I do for you?');
   } catch (e) { alert('Delete failed: ' + e.message); }
 });

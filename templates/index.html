@@ -10,6 +10,13 @@
       <input type="checkbox" id="userag"> Use documents
     </label>
     <button id="clear">Clear</button>
+    <select id="sessionSel" title="Past chats"><option value="">New chat</option></select>
+    <span class="export-group" title="Export this chat">
+      <button id="expMd" type="button">MD</button>
+      <button id="expHtml" type="button">HTML</button>
+      <button id="expDocx" type="button">Word</button>
+      <button id="expCsv" type="button">CSV</button>
+    </span>
   </div>
   <div id="log" class="log" aria-live="polite"></div>
   <form id="form" class="composer">
@@ -92,10 +99,14 @@ form.addEventListener('submit', async (e) => {
   addMsg('user', text);
   addMsg('assistant', '…');
   const thinking = log.lastChild;
+  // Track messages for export.
+  if (!window.chatMessages) window.chatMessages = [];
+  window.chatMessages.push({role: 'user', content: text});
   const body = {
     model: modelSel.value,
     messages: [{role: 'user', content: text}],
   };
+  if (currentSessionId) body.session_id = currentSessionId;
   if (document.getElementById('userag').checked) {
     body.rag = {enabled: true, top_k: 5};
   }
@@ -122,6 +133,12 @@ form.addEventListener('submit', async (e) => {
         out += '\n\n⚠ unverified citations: ' +
           j.citation_check.unresolved.map(u => `${u.filename} chunk ${u.chunk}`).join(', ');
       }
+      // Adopt server session id (first message creates it).
+      if (j.session_id && !currentSessionId) {
+        currentSessionId = j.session_id;
+        loadSessions();
+      }
+      window.chatMessages.push({role: 'assistant', content: out});
       addMsg('assistant', out);
     }
   } catch (err) {
@@ -158,6 +175,83 @@ function pollBackgroundJob(jobId) {
 // background_job_id, start polling.
 
 
-document.getElementById('clear').addEventListener('click', () => { log.innerHTML = ''; });
+document.getElementById('clear').addEventListener('click', () => {
+  log.innerHTML = '';
+  window.chatMessages = [];
+  currentSessionId = null;
+  document.getElementById('sessionSel').value = '';
+});
+
+// ── Session memory UI ──────────────────────────────────────
+let currentSessionId = null;
+
+async function loadSessions() {
+  const sel = document.getElementById('sessionSel');
+  try {
+    const r = await fetch('/v1/sessions');
+    const j = await r.json();
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">New chat</option>';
+    (j.sessions || []).forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      const d = new Date(s.updated_at * 1000).toLocaleDateString();
+      o.textContent = `${s.title.slice(0, 40)} (${d})`;
+      sel.appendChild(o);
+    });
+    if (currentSessionId) sel.value = currentSessionId;
+    else sel.value = cur;
+  } catch (e) { /* sessions unavailable */ }
+}
+loadSessions();
+
+document.getElementById('sessionSel').addEventListener('change', async (e) => {
+  const sid = e.target.value;
+  log.innerHTML = '';
+  window.chatMessages = [];
+  if (!sid) { currentSessionId = null; return; }
+  currentSessionId = sid;
+  try {
+    const r = await fetch('/v1/sessions/' + sid);
+    const j = await r.json();
+    (j.messages || []).forEach(m => {
+      if (m.role === 'user' || m.role === 'assistant') {
+        window.chatMessages.push({role: m.role, content: m.content});
+        addMsg(m.role, m.content);
+      }
+    });
+  } catch (err) { addMsg('assistant', 'Could not load chat history.'); }
+});
+
+// ── Export UI ──────────────────────────────────────────────
+async function exportChat(fmt) {
+  const msgs = window.chatMessages || [];
+  if (!msgs.length) { alert('Nothing to export yet.'); return; }
+  try {
+    const r = await fetch('/v1/export', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({messages: msgs, format: fmt}),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      alert('Export failed: ' + (j.detail || r.status));
+      return;
+    }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const ext = {md: 'md', html: 'html', docx: 'docx', csv: 'csv'}[fmt] || fmt;
+    a.download = 'milo-export.' + ext;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { alert('Export failed: ' + e.message); }
+}
+document.getElementById('expMd').addEventListener('click', () => exportChat('md'));
+document.getElementById('expHtml').addEventListener('click', () => exportChat('html'));
+document.getElementById('expDocx').addEventListener('click', () => exportChat('docx'));
+document.getElementById('expCsv').addEventListener('click', () => exportChat('csv'));
 </script>
 {% endblock %}

@@ -45,9 +45,20 @@ class JsonRpcResponse(BaseModel):
 def load_catalog(mcp_dir: Path) -> dict:
     """Load the tool catalog."""
     catalog_path = mcp_dir / "catalog.json"
+    tools = []
     if catalog_path.exists():
-        return json.loads(catalog_path.read_text())
-    return {"tools": []}
+        tools = json.loads(catalog_path.read_text()).get("tools", [])
+
+    # Add GitHub integration tools (Phase 3)
+    github_tools_path = mcp_dir / "github-tools.json"
+    if github_tools_path.exists():
+        try:
+            github_tools = json.loads(github_tools_path.read_text())
+            tools.extend(github_tools)
+        except Exception:
+            pass
+
+    return {"tools": tools}
 
 
 def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
@@ -158,6 +169,57 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
     return router
 
 
+async def _github_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Execute GitHub integration tools."""
+    from .integrations.github import GitHubClient
+
+    try:
+        client = GitHubClient()
+    except ValueError:
+        return {
+            "content": [
+                {"type": "text", "text": "GitHub not configured (GITHUB_TOKEN missing)"}
+            ],
+            "isError": True,
+        }
+
+    try:
+        if tool_name == "github_list_repos":
+            repos = await client.list_repos(args.get("username", "nrupala"))
+            summary = "\n".join(
+                f"- {r['full_name']}: {r.get('description', 'no description')}"
+                for r in repos[:20]
+            )
+            return {"content": [{"type": "text", "text": summary}]}
+
+        elif tool_name == "github_list_issues":
+            issues = await client.list_issues(
+                args["owner"], args["repo"], args.get("state", "open")
+            )
+            summary = "\n".join(f"#{i['number']}: {i['title']}" for i in issues[:20])
+            return {"content": [{"type": "text", "text": summary or "No issues"}]}
+
+        elif tool_name == "github_list_prs":
+            prs = await client.list_prs(
+                args["owner"], args["repo"], args.get("state", "open")
+            )
+            summary = "\n".join(f"#{p['number']}: {p['title']}" for p in prs[:20])
+            return {"content": [{"type": "text", "text": summary or "No PRs"}]}
+
+        else:
+            return {
+                "content": [
+                    {"type": "text", "text": f"Unknown GitHub tool: {tool_name}"}
+                ],
+                "isError": True,
+            }
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": f"GitHub error: {e}"}],
+            "isError": True,
+        }
+
+
 async def _escalate(
     params: dict[str, Any], get_app_state, caller: str
 ) -> dict[str, Any]:
@@ -201,10 +263,14 @@ async def _call_tool(
 ) -> dict[str, Any]:
     """Execute a tool call by mapping to Milo's HTTP endpoints."""
     tool_name = params.get("name", "")
-    # args = params.get("arguments", {})  # wired in Phase 1b
+    args = params.get("arguments", {})
 
     # Log to ledger (TODO: integrate with actual ledger)
     print(f"[mcp] {caller} -> {tool_name}")
+
+    # ── GitHub integration (Phase 3) ─────────────────────────
+    if tool_name.startswith("github_"):
+        return await _github_tool(tool_name, args)
 
     # For Phase 1, support the core tools via direct function calls.
     # Full HTTP mapping comes in Phase 1b.

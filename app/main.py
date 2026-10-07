@@ -617,6 +617,17 @@ def create_app(
                 },
             )
         memory.add_message(session_id, "user", user_text)
+
+        # ── v0.23.0: extract semantic facts from user message ──
+        from .semantic import SemanticMemory, extract_facts_simple
+
+        try:
+            sem = SemanticMemory(Path("/opt/mymilo/data"))
+            facts = extract_facts_simple(user_text)
+            for category, key, value in facts:
+                sem.add_fact(user_email, category, key, value)
+        except Exception:
+            pass  # Fact extraction is best-effort
         # Current date: models have training cutoffs; grounding them in
         # today prevents "stuck in 2024" answers.
         from datetime import UTC, datetime
@@ -962,6 +973,26 @@ def create_app(
             name=settings.persona.name,
             system_prompt=settings.persona.system_prompt,
         ).model_dump()
+
+    # ── v0.23.0: semantic memory (facts + profile) ────────────
+    @app.get("/v1/profile")
+    async def get_profile(request: Request):
+        """Get user's semantic profile (facts grouped by category)."""
+        from .semantic import SemanticMemory
+
+        user_email = request.headers.get("cf-access-authenticated-user-email", "")
+        sem = SemanticMemory(Path("/opt/mymilo/data"))
+        return sem.get_profile(user_email)
+
+    @app.delete("/v1/profile/facts/{fact_id}")
+    async def delete_fact(fact_id: str, request: Request):
+        """Delete a fact (user request)."""
+        from .semantic import SemanticMemory
+
+        user_email = request.headers.get("cf-access-authenticated-user-email", "")
+        sem = SemanticMemory(Path("/opt/mymilo/data"))
+        ok = sem.delete_fact(user_email, fact_id)
+        return {"deleted": ok}
 
     @app.get("/v1/mcp/tools")
     async def mcp_tools():

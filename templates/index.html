@@ -15,7 +15,7 @@
   </div>
   <div id="log" class="log" aria-live="polite"></div>
   <form id="form" class="composer">
-    <textarea id="input" rows="3" placeholder="Talk to your Milo…" required></textarea>
+    <textarea id="input" rows="3" placeholder="Talk to MyMilo…" required></textarea>
     <button type="button" id="mic" title="Dictate" aria-label="Dictate">🎙</button>
     <button type="submit">Send</button>
   </form>
@@ -81,30 +81,52 @@ const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (!SpeechRec) {
   micBtn.style.display = 'none'; // no voice input on this browser
 } else {
-  const rec = new SpeechRec();
-  rec.lang = 'en-US';
-  rec.interimResults = true;
-  rec.continuous = false;
+  // iOS Safari hardening: fresh instance per tap, continuous + auto-restart,
+  // user-visible errors. Reusing one instance is flaky on iPhone.
+  let rec = null;
+  let wantRec = false;
   let baseText = '';
-  rec.onresult = (event) => {
-    let interim = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) baseText += transcript + ' ';
-      else interim += transcript;
-    }
-    input.value = (baseText + interim).trim();
+  const stopUi = () => {
+    wantRec = false;
+    micBtn.classList.remove('rec');
+    micBtn.textContent = '🎙';
   };
-  const stopUi = () => { micBtn.classList.remove('rec'); micBtn.textContent = '🎙'; };
-  rec.onend = stopUi;
-  rec.onerror = stopUi;
+  const startRec = () => {
+    rec = new SpeechRec();
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.continuous = true; // iOS stops after pauses unless continuous
+    rec.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) baseText += transcript + ' ';
+        else interim += transcript;
+      }
+      input.value = (baseText + interim).trim();
+    };
+    rec.onend = () => {
+      // iOS fires onend spontaneously — restart if user still wants it.
+      if (wantRec) { try { rec.start(); } catch (e) { stopUi(); } }
+      else stopUi();
+    };
+    rec.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        input.placeholder = 'Mic blocked — allow microphone in Settings';
+      }
+      stopUi();
+    };
+    try { rec.start(); }
+    catch (e) { stopUi(); }
+  };
   micBtn.addEventListener('click', () => {
-    if (micBtn.classList.contains('rec')) { rec.stop(); return; }
+    if (wantRec) { wantRec = false; if (rec) rec.stop(); return; }
     baseText = input.value ? input.value.replace(/\s+$/, '') + ' ' : '';
     input.value = baseText;
+    wantRec = true;
     micBtn.classList.add('rec');
     micBtn.textContent = '⏹';
-    try { rec.start(); } catch (e) { stopUi(); }
+    startRec();
   });
 }
 

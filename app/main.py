@@ -519,7 +519,7 @@ def create_app(
                 {
                     "role": "system",
                     "content": (
-                        "You are Milo, a helpful personal AI assistant. "
+                        "You are MyMilo, a helpful personal AI assistant. "
                         "Answer the user's questions directly and helpfully. "
                         "You can provide recipes, cooking advice, general "
                         "knowledge, writing help, and everyday assistance. "

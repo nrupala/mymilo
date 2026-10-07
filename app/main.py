@@ -18,6 +18,8 @@ retrieval-augmented generation with citation-integrity verification.
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -379,17 +381,22 @@ def create_app(
                 },
             )
         elif fmt == "csv":
-            # Extract tables from assistant messages.
+            # Extract tables from assistant messages. If no tables,
+            # fall back to exporting the messages themselves.
             all_text = "\n\n".join(
                 m.get("content", "") for m in messages if m.get("role") == "assistant"
             )
             tables = extract_tables(all_text)
-            if not tables:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No tables found in the conversation to export.",
-                )
-            content = tables_to_csv(tables)
+            if tables:
+                content = tables_to_csv(tables)
+            else:
+                # No tables: export messages as role/content rows.
+                buf_csv = io.StringIO()
+                w = csv.writer(buf_csv)
+                w.writerow(["role", "content"])
+                for m in messages:
+                    w.writerow([m.get("role", ""), m.get("content", "")])
+                content = buf_csv.getvalue()
             return Response(
                 content=content,
                 media_type="text/csv",

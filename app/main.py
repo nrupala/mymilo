@@ -905,7 +905,7 @@ def create_app(
 
         This is the contract the kernel's MCP server implements —
         the shapes, not a running server. Each tool maps to an HTTP endpoint.
-        Merges github-tools.json (Phase 3) if present.
+        Merges github-tools.json and gmail-calendar-tools.json (Phase 3).
         """
         try:
             catalog = json.loads(mcp_catalog_path.read_text())
@@ -918,6 +918,16 @@ def create_app(
                     if isinstance(gh_tools, dict):
                         gh_tools = gh_tools.get("tools", [])
                     catalog["tools"] = catalog.get("tools", []) + gh_tools
+                except (OSError, json.JSONDecodeError):
+                    pass
+            # Merge Gmail/Calendar tools (Phase 3, privacy-first)
+            gc_path = mcp_catalog_path.parent / "gmail-calendar-tools.json"
+            if gc_path.exists():
+                try:
+                    gc_tools = json.loads(gc_path.read_text())
+                    if isinstance(gc_tools, dict):
+                        gc_tools = gc_tools.get("tools", [])
+                    catalog["tools"] = catalog.get("tools", []) + gc_tools
                 except (OSError, json.JSONDecodeError):
                     pass
             return catalog

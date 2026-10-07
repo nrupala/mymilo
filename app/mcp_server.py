@@ -91,13 +91,14 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
         # Cloudflare Access (human or agent via Access)
         if cf_email:
             return f"cf:{cf_email}"
-        # Service token for agent-to-agent
+        # Service token for agent-to-agent (v0.24.0 hardening).
+        # Tokens must be listed in MCP_SERVICE_TOKENS env var.
         if authorization and authorization.startswith("Bearer "):
             token = authorization[7:]
-            # TODO: validate against configured service tokens
-            # For now, accept any non-empty token and log it
-            if token:
+            valid_tokens = getattr(get_app_state().settings, "mcp_service_tokens", [])
+            if token and token in valid_tokens:
                 return f"token:{token[:8]}..."
+            # Unknown or missing token = 401, no exceptions.
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     @router.get("/sse")

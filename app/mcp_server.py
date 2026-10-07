@@ -58,6 +58,15 @@ def load_catalog(mcp_dir: Path) -> dict:
         except Exception:
             pass
 
+    # Add Gmail/Calendar tools (Phase 3, privacy-first)
+    gc_tools_path = mcp_dir / "gmail-calendar-tools.json"
+    if gc_tools_path.exists():
+        try:
+            gc_tools = json.loads(gc_tools_path.read_text())
+            tools.extend(gc_tools)
+        except Exception:
+            pass
+
     return {"tools": tools}
 
 
@@ -169,6 +178,62 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
     return router
 
 
+async def _gmail_calendar_tool(
+    tool_name: str, args: dict[str, Any], caller: str
+) -> dict[str, Any]:
+    """Gmail/Calendar tools with privacy-first connect/disconnect."""
+    from .integrations.calendar import CalendarClient
+    from .integrations.gmail import GmailClient
+
+    # Extract user email from caller (format: "cf:email" or "token:...")
+    user_email = caller.split(":", 1)[1] if ":" in caller else caller
+
+    try:
+        if tool_name == "gmail_search":
+            client = GmailClient()
+            await client.connect(user_email)
+            try:
+                results = await client.search(
+                    args["query"], args.get("max_results", 10)
+                )
+                summary = "\n".join(
+                    f"- {r.get('subject', 'no subject')} ({r.get('from', '?')})"
+                    for r in results
+                )
+                return {"content": [{"type": "text", "text": summary or "No results"}]}
+            finally:
+                await client.disconnect()
+
+        elif tool_name == "calendar_list_events":
+            from datetime import datetime
+
+            client = CalendarClient()
+            await client.connect(user_email)
+            try:
+                events = await client.list_events(
+                    datetime.fromisoformat(args["time_min"]),
+                    datetime.fromisoformat(args["time_max"]),
+                    args.get("max_results", 20),
+                )
+                summary = "\n".join(
+                    f"- {e.get('summary', '?')} ({e.get('start', '?')})" for e in events
+                )
+                return {"content": [{"type": "text", "text": summary or "No events"}]}
+            finally:
+                await client.disconnect()
+
+        else:
+            return {
+                "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
+                "isError": True,
+            }
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": f"Error: {e}"}],
+            "isError": True,
+        }
+
+
 async def _github_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Execute GitHub integration tools."""
     from .integrations.github import GitHubClient
@@ -271,6 +336,10 @@ async def _call_tool(
     # ── GitHub integration (Phase 3) ─────────────────────────
     if tool_name.startswith("github_"):
         return await _github_tool(tool_name, args)
+
+    # ── Gmail/Calendar (Phase 3, privacy-first) ────────────────
+    if tool_name.startswith("gmail_") or tool_name.startswith("calendar_"):
+        return await _gmail_calendar_tool(tool_name, args, caller)
 
     # For Phase 1, support the core tools via direct function calls.
     # Full HTTP mapping comes in Phase 1b.

@@ -511,6 +511,23 @@ def create_app(
         insert_at = 0
         while insert_at < len(messages) and messages[insert_at].get("role") == "system":
             insert_at += 1
+        # v0.11.1: ensure a system prompt — the small local model freelances
+        # without one (refusing recipes, etc.). Milo is a helpful assistant.
+        if insert_at == 0:
+            messages.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": (
+                        "You are Milo, a helpful personal AI assistant. "
+                        "Answer the user's questions directly and helpfully. "
+                        "You can provide recipes, cooking advice, general "
+                        "knowledge, writing help, and everyday assistance. "
+                        "Be concise and friendly."
+                    ),
+                },
+            )
+            insert_at = 1
         messages[insert_at:insert_at] = history
         memory.add_message(session_id, "user", user_text)
         # Current date: models have training cutoffs; grounding them in

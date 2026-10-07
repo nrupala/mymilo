@@ -309,7 +309,7 @@ class Database:
         with self._lock:
             cur = self._conn.execute(
                 "SELECT c.id AS chunk_id, c.doc_id, c.chunk_index, c.content, "
-                "c.embedding, c.embed_dim, d.filename "
+                "c.embedding, c.embed_dim, d.filename, d.tags "
                 "FROM chunks c JOIN documents d ON c.doc_id = d.id"
             )
             rows = cur.fetchall()

@@ -83,7 +83,7 @@ from .schemas import (
     SkillInfo,
     Suggestion,
 )
-from .skills import resolve_skills_dir, scan_skills
+from .skills import match_skill, resolve_skills_dir, scan_skills
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -344,6 +344,20 @@ def create_app(
         payload = req.model_dump(exclude_none=True)
         rag_block = payload.pop("rag", None)
 
+        # ── skills (always-on) ───────────────────────────────────
+        # Match the message against skill triggers; a matched skill's
+        # instructions are prepended as a system message so Milo responds
+        # with that repo's methodology. Independent of the opt-in RAG.
+        active_skill: str | None = None
+        skill = match_skill(req.messages[-1].content, app.state.skills_dir)
+        messages = [m.model_dump() for m in req.messages]
+        if skill:
+            active_skill = skill["name"]
+            messages = [
+                {"role": "system", "content": skill["content"]},
+                *messages,
+            ]
+
         rag_sources_out: list[dict] = []
         citation_check: dict | None = None
         retrieved: list[dict] = []
@@ -351,10 +365,10 @@ def create_app(
             retrieved = await docs.search(
                 req.messages[-1].content, top_k=rag_block.get("top_k", 5)
             )
-            payload["messages"] = build_rag_messages(
-                [m.model_dump() for m in req.messages], retrieved
-            )
+            payload["messages"] = build_rag_messages(messages, retrieved)
             rag_sources_out = rag_sources(retrieved)
+        else:
+            payload["messages"] = messages
 
         data = await router.chat_completion(req.model, payload)
 
@@ -363,6 +377,8 @@ def create_app(
             citation_check = verify_citations(answer, retrieved)
             data["rag_sources"] = rag_sources_out
             data["citation_check"] = citation_check
+        if active_skill:
+            data["active_skill"] = active_skill
         return JSONResponse(content=data)
 
     # ── documents ────────────────────────────────────────────

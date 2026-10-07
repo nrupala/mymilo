@@ -9,15 +9,22 @@ a ``SKILL.md`` with frontmatter::
     name: morning-briefing
     description: Drafts the morning briefing from indexed documents.
     version: 1
+    triggers: morning briefing, daily briefing
     ---
     # Morning briefing
     ...instructions...
 
-The scanner ingests each skill as a document tagged ``skill:<name>`` so
-skills are searchable through the same retrieval machinery as everything
-else. New/changed/deleted files are picked up on startup, on demand
-(``POST /v1/skills/rescan``), and periodically while the scheduler runs
-(``[skills] poll_seconds`` — mtime/sha polling, no watchdog dependency).
+Skills activate by trigger matching: the chat endpoint checks the user's
+message against each skill's ``triggers`` (case-insensitive) and prepends
+the first match's instructions as a system message. Trigger matching is
+always-on and independent of the "Use documents" RAG toggle.
+
+The scanner ingests each skill as a document tagged ``skill:<name>`` for
+bookkeeping, but skills are EXCLUDED from vector search so they never
+pollute document retrieval. New/changed/deleted files are picked up on
+startup, on demand (``POST /v1/skills/rescan``), and periodically while
+the scheduler runs (``[skills] poll_seconds`` — mtime/sha polling, no
+watchdog dependency).
 
 One convention with the Skill Foundry idea, not two.
 """
@@ -108,3 +115,34 @@ def _remove_skill(db: Any, docs: Any, row: dict[str, Any]) -> None:
 def resolve_skills_dir(configured: str | Path, base_dir: str | Path) -> Path:
     p = Path(configured)
     return p if p.is_absolute() else Path(base_dir) / p
+
+
+def match_skill(message: str, skills_dir: str | Path) -> dict[str, str] | None:
+    """Match a chat message against skill triggers (case-insensitive).
+
+    Returns {"name": ..., "description": ..., "content": ...} for the first
+    skill whose trigger phrase appears in the message, or None. Deterministic:
+    skills are checked in sorted directory order so matches are stable.
+    """
+    root = Path(skills_dir)
+    if not root.is_dir():
+        return None
+    lowered = message.lower()
+    for skill_md in sorted(root.glob("*/SKILL.md")):
+        try:
+            raw = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta, body = parse_frontmatter(raw)
+        triggers = meta.get("triggers", "")
+        if not triggers:
+            continue
+        for trigger in triggers.split(","):
+            trigger = trigger.strip().lower()
+            if trigger and trigger in lowered:
+                return {
+                    "name": meta.get("name", skill_md.parent.name),
+                    "description": meta.get("description", ""),
+                    "content": body,
+                }
+    return None

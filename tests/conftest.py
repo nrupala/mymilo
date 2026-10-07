@@ -8,7 +8,13 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import EmbeddingsConfig, ModelRoute, SchedulerConfig, Settings
+from app.config import (
+    EmbeddingsConfig,
+    ModelRoute,
+    SchedulerConfig,
+    Settings,
+    SkillsConfig,
+)
 from app.main import create_app
 
 
@@ -55,6 +61,10 @@ def settings(tmp_path):
         # Tests drive the scheduler explicitly (tick / trigger); the
         # background loop stays off so runs are deterministic.
         scheduler=SchedulerConfig(enabled=False),
+        # Generic fixtures don't test skills; disable so the real skills/
+        # dir (with 13 SKILL.md files) isn't scanned and embedded on startup
+        # (the stub embedder 404s).
+        skills=SkillsConfig(enabled=False),
     )
 
 

@@ -94,7 +94,10 @@ class DocumentService:
         }
 
     def list(self) -> list[dict]:
-        return self.db.list_documents()
+        # Skills are managed via /v1/skills, not as user documents.
+        return [
+            d for d in self.db.list_documents() if "skill:" not in (d.get("tags") or "")
+        ]
 
     def get(self, doc_id: str) -> dict:
         doc = self.db.get_document(doc_id)
@@ -116,7 +119,13 @@ class DocumentService:
         except EmbedderUnavailableError:
             raise
         qdim = qvec.shape[0]
-        usable = [r for r in rows if r["embed_dim"] == qdim and r["embedding"]]
+        usable = [
+            r
+            for r in rows
+            if r["embed_dim"] == qdim
+            and r["embedding"]
+            and "skill:" not in (r.get("tags") or "")
+        ]
         if not usable:
             logger.warning(
                 "No chunks with matching embedding dim %d — re-ingest documents "

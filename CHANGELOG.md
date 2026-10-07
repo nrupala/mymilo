@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 — 2026-10-06
+- Skills from all repos: 13 repo capabilities now live as Milo skills
+  (stock-analysis, electrical-code, read-aloud, verified-code,
+  article-draft, finance-content, fault-simulation, budget-engine,
+  code-graph, safe-link, document-reader, financial-analytics,
+  travel-fares). Each skill is a SKILL.md with trigger phrases; chat
+  matches triggers deterministically and prepends the skill's expert
+  instructions as a system message. Skills are always-on (independent
+  of the "Use documents" RAG toggle). The UI shows the active skill
+  (🛠 name) above Milo's reply. Response includes `active_skill`.
+
 ## 0.6.4 — 2026-10-06
 - Honest error labeling: the Access-login detector now only fires for the
   actual login page (redirect to cloudflareaccess.com). Other HTML error

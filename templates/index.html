@@ -112,6 +112,9 @@ form.addEventListener('submit', async (e) => {
     } else {
       const c = (j.choices && j.choices[0] && j.choices[0].message) || {};
       let out = c.content || JSON.stringify(j);
+      if (j.active_skill) {
+        out = '🛠 ' + j.active_skill + '\n\n' + out;
+      }
       if (j.citation_check && !j.citation_check.ok) {
         out += '\n\n⚠ unverified citations: ' +
           j.citation_check.unresolved.map(u => `${u.filename} chunk ${u.chunk}`).join(', ');

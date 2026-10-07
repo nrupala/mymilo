@@ -99,6 +99,7 @@ class Settings:
     vault: VaultConfig = field(default_factory=VaultConfig)
     os: OSConfig = field(default_factory=OSConfig)
     default_model: str = "local"
+    mcp_service_tokens: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Keep the default model routable no matter how Settings was built.
@@ -203,6 +204,10 @@ class Settings:
             s.default_model = "os"
         elif not s.route_for(s.default_model) and s.models:
             s.default_model = s.models[0].name
+        # v0.24.0: MCP service tokens for agent-to-agent auth (hardening).
+        # Comma-separated list; empty = no token auth (CF Access only).
+        raw_tokens = os.environ.get("MCP_SERVICE_TOKENS", "")
+        s.mcp_service_tokens = [t.strip() for t in raw_tokens.split(",") if t.strip()]
         return s
 
     def route_for(self, name: str) -> ModelRoute | None:

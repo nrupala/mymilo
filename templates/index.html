@@ -272,8 +272,8 @@ document.getElementById('sessionSel').addEventListener('change', async (e) => {
 async function exportChat(fmt, msgs) {
   msgs = msgs || window.chatMessages || [];
   if (!msgs.length) { alert('Nothing to export yet.'); return; }
-  // Format picker for full-chat export.
-  if (!msgs._single && !fmt._chosen) {
+  // Format picker for full-chat export (fmt may be null from toolbar).
+  if (!fmt) {
     fmt = await pickFormat();
     if (!fmt) return;
   }
@@ -330,5 +330,23 @@ fullExportBtn.type = 'button'; fullExportBtn.className = 'icon-btn';
 fullExportBtn.title = 'Export full chat'; fullExportBtn.textContent = '⤓';
 fullExportBtn.addEventListener('click', () => exportChat(null));
 document.querySelector('.chat-toolbar').appendChild(fullExportBtn);
+// Toolbar: delete current chat/thread button.
+const delChatBtn = document.createElement('button');
+delChatBtn.type = 'button'; delChatBtn.className = 'icon-btn';
+delChatBtn.title = 'Delete this chat'; delChatBtn.textContent = '🗑';
+delChatBtn.addEventListener('click', async () => {
+  const sid = window.currentSessionId;
+  if (!sid) { alert('No active chat to delete.'); return; }
+  if (!confirm('Delete this chat? This cannot be undone.')) return;
+  try {
+    const r = await fetch('/v1/sessions/' + encodeURIComponent(sid), {method: 'DELETE'});
+    if (!r.ok) { alert('Delete failed: ' + r.status); return; }
+    window.chatMessages = [];
+    window.currentSessionId = null;
+    document.querySelector('.chat-messages').innerHTML = '';
+    addMsg('assistant', 'Chat deleted. Starting fresh — what can I do for you?');
+  } catch (e) { alert('Delete failed: ' + e.message); }
+});
+document.querySelector('.chat-toolbar').appendChild(delChatBtn);
 </script>
 {% endblock %}

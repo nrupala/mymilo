@@ -511,15 +511,53 @@ def create_app(
         from datetime import UTC, datetime
 
         today = datetime.now(UTC).strftime("%Y-%m-%d")
+        # ── v0.10.4: memory awareness ────────────────────────────
+        # Tell the model it HAS past conversations. Without this, it
+        # honestly (but wrongly) claims it cannot access history.
+        memory_note = (
+            "You have access to the user's past conversations. "
+            "The current chat's recent turns are in your context. "
+            "When the user asks about previous discussions, acknowledge "
+            "you can look them up via the session history."
+        )
         messages = [
             {
                 "role": "system",
                 "content": f"Today is {today}. Your training data may be older; "
                 "do not present past events as current. If you lack current "
-                "data for a question, say what you need instead of guessing.",
+                "data for a question, say what you need instead of guessing. "
+                + memory_note,
             },
             *messages,
         ]
+        # Cross-session lookup: "what did we discuss on [date]?"
+        from datetime import datetime as _dt
+
+        _hist_triggers = [
+            "past conversation",
+            "previous conversation",
+            "history",
+            "what did we discuss",
+            "what were we discussing",
+            "go back to",
+        ]
+        if any(t in user_text.lower() for t in _hist_triggers):
+            past = memory.list_sessions(limit=10)
+            # Exclude the current session.
+            past = [s for s in past if s["id"] != session_id][:5]
+            if past:
+                lines = ["Recent past conversations:"]
+                for s in past:
+                    d = _dt.fromtimestamp(s["updated_at"]).strftime("%Y-%m-%d")
+                    lines.append(f"- {d}: {s['title']}")
+                lines.append(
+                    "If the user asks about a specific one, summarize what "
+                    "you know from its title and offer to load it."
+                )
+                messages = [
+                    {"role": "system", "content": "\n".join(lines)},
+                    *messages,
+                ]
         if skill:
             active_skill = skill["name"]
             messages = [

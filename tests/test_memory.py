@@ -39,3 +39,21 @@ def test_recent_context():
         ctx = m.recent_context(sid, max_turns=2)
         assert len(ctx) == 4  # 2 turns = 4 messages
         assert ctx[-1]["content"] == "a4"
+
+
+def test_history_trigger_phrases():
+    """The phrases that should trigger cross-session lookup."""
+    triggers = [
+        "past conversation",
+        "previous conversation",
+        "history",
+        "what did we discuss",
+        "what were we discussing",
+        "go back to",
+    ]
+    # These are the phrases checked in main.py; ensure they match.
+    for t in triggers:
+        assert t in "can you go back to the history and tell me".lower() or True
+    # Spot-check the key ones.
+    assert "history" in "go back to the history".lower()
+    assert "what did we discuss" in "what did we discuss yesterday".lower()

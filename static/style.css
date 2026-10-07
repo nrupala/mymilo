@@ -32,6 +32,38 @@ main { max-width: 860px; margin: 0 auto; padding: 1.2rem; }
 .export-drop button:hover { background: #223040; filter: none; }
 #clear { padding: .5rem .7rem; background: var(--panel); color: var(--dim); }
 #clear:hover { color: var(--ink); filter: none; }
+/* Per-message actions: subtle, appear on hover/focus, always visible on touch. */
+.msg { position: relative; }
+.msg-actions { display: flex; gap: .25rem; margin-top: .5rem; opacity: .45;
+  transition: opacity .18s ease; }
+.msg:hover .msg-actions, .msg:focus-within .msg-actions { opacity: 1; }
+@media (hover: none) { .msg-actions { opacity: .8; } }
+.icon-btn { background: none; border: 1px solid #2a3642; color: var(--dim);
+  border-radius: 6px; padding: .25rem .5rem; font-size: .85rem; font-weight: 400;
+  cursor: pointer; transition: all .15s ease; }
+.icon-btn:hover { color: var(--ink); border-color: var(--acc); filter: none;
+  transform: translateY(-1px); }
+.icon-btn:active { transform: translateY(0); }
+/* Format picker: bottom sheet on mobile, centered card on desktop. */
+.format-sheet { position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn .18s ease; }
+@media (min-width: 600px) { .format-sheet { align-items: center; } }
+.sheet-card { background: var(--panel); border-radius: 16px 16px 0 0;
+  width: 100%; max-width: 420px; padding: .75rem;
+  animation: slideUp .22s cubic-bezier(.32,.72,.35,1); }
+@media (min-width: 600px) { .sheet-card { border-radius: 16px; } }
+.sheet-title { text-align: center; color: var(--dim); font-size: .8rem;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  padding: .5rem 0 .75rem; }
+.sheet-card button { display: block; width: 100%; text-align: center;
+  background: #223040; color: var(--ink); border: 0; border-radius: 10px;
+  padding: .8rem; margin-bottom: .5rem; font-weight: 500; font-size: .95rem; }
+.sheet-card button:hover { filter: brightness(1.15); }
+.sheet-card button.sheet-cancel { background: none; color: var(--dim); margin-bottom: 0; }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes slideUp { from { transform: translateY(24px); opacity: .6; } }
 select, input, textarea, button { font: inherit; }
 select, input, textarea { background: var(--panel); color: var(--ink);
   border: 1px solid #2a3642; border-radius: 6px; padding: .5rem .7rem; }

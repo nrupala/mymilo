@@ -505,6 +505,45 @@ def create_app(
                 }
             )
 
+        # ── per-turn escalation to Wright (v0.20.0) ──────────────
+        # Detect if this message needs Wright's help. If so, queue
+        # an escalation and return immediately with a status message.
+        from pathlib import Path
+
+        from .escalation import EscalationQueue
+        from .escalation_turn import should_escalate_to_wright
+
+        should_esc, esc_reason = should_escalate_to_wright(user_text)
+        if should_esc:
+            queue_dir = Path("/opt/mymilo/data/escalations")
+            queue = EscalationQueue(queue_dir)
+            session_id_esc = req.session_id or "pending"
+            esc_id = queue.submit(
+                user_email=user_email,
+                request=user_text,
+                context={"reason": esc_reason},
+                session_id=session_id_esc,
+            )
+            return JSONResponse(
+                content={
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": (
+                                    "Got it — this needs Wright's help. "
+                                    f"I've queued it (escalation {esc_id[:8]}). "
+                                    "He'll work on it and I'll bring you "
+                                    "the result."
+                                ),
+                            }
+                        }
+                    ],
+                    "escalation_id": esc_id,
+                    "model": req.model,
+                }
+            )
+
         # ── skills (always-on) ───────────────────────────────────
         # Match the message against skill triggers; a matched skill's
         # instructions are prepended as a system message so Milo responds

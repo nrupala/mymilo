@@ -557,6 +557,22 @@ def create_app(
         # Auto-create a session if the client didn't send one.
         session_id = req.session_id or memory.create_session(user_email)
         history = memory.recent_context(session_id, max_turns=10)
+
+        # ── v0.21.0: episodic memory ─────────────────────────────
+        # Pull relevant past episodes for continuity of thought.
+        from .episodic import EpisodicMemory
+
+        episodic = EpisodicMemory(memory)
+        episodes = await episodic.get_relevant_history(
+            user_email, user_text, max_episodes=2
+        )
+        # Inject episode summaries as context (if any found)
+        episode_context = ""
+        if episodes:
+            episode_context = "\n".join(
+                f"[Past: {ep['title']}] {ep.get('summary', '')}" for ep in episodes
+            )
+
         messages = [m.model_dump() for m in req.messages]
         # Insert history after any leading system messages.
         insert_at = 0
@@ -591,6 +607,15 @@ def create_app(
             )
             insert_at = 1
         messages[insert_at:insert_at] = history
+        # Inject episodic memory (past relevant sessions) after history
+        if episode_context:
+            messages.insert(
+                insert_at + len(history),
+                {
+                    "role": "system",
+                    "content": f"Relevant past conversations:\n{episode_context}",
+                },
+            )
         memory.add_message(session_id, "user", user_text)
         # Current date: models have training cutoffs; grounding them in
         # today prevents "stuck in 2024" answers.

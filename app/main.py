@@ -903,11 +903,24 @@ def create_app(
     async def mcp_tools():
         """The MCP tool surface as data (maven transfer #8, reviewed).
 
-        This is the contract the kernel's MCP server implements — the
-        shapes, not a running server. Each tool maps to an HTTP endpoint.
+        This is the contract the kernel's MCP server implements —
+        the shapes, not a running server. Each tool maps to an HTTP endpoint.
+        Merges github-tools.json (Phase 3) if present.
         """
         try:
-            return json.loads(mcp_catalog_path.read_text())
+            catalog = json.loads(mcp_catalog_path.read_text())
+            # Merge GitHub tools (Phase 3)
+            gh_path = mcp_catalog_path.parent / "github-tools.json"
+            if gh_path.exists():
+                try:
+                    gh_tools = json.loads(gh_path.read_text())
+                    # github-tools.json may be a list or {"tools": [...]}
+                    if isinstance(gh_tools, dict):
+                        gh_tools = gh_tools.get("tools", [])
+                    catalog["tools"] = catalog.get("tools", []) + gh_tools
+                except (OSError, json.JSONDecodeError):
+                    pass
+            return catalog
         except (OSError, json.JSONDecodeError) as exc:
             raise HTTPException(
                 status_code=503, detail="MCP catalog unavailable"

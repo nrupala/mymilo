@@ -399,6 +399,21 @@ def create_app(
                 {"role": "system", "content": skill["content"]},
                 *messages,
             ]
+            # Live market data for "brief me on the market today".
+            from .market_data import (
+                fetch_indices,
+                format_brief,
+                wants_market_brief,
+            )
+
+            if wants_market_brief(user_text, active_skill):
+                indices = await fetch_indices()
+                brief = format_brief(indices)
+                if brief:
+                    messages = [
+                        {"role": "system", "content": brief},
+                        *messages,
+                    ]
 
         rag_sources_out: list[dict] = []
         citation_check: dict | None = None

@@ -190,6 +190,96 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
     return router
 
 
+async def _memory_tool(
+    tool_name: str, args: dict[str, Any], caller: str, get_app_state
+) -> dict[str, Any]:
+    """Execute semantic memory tools via direct function calls."""
+    from .semantic import SemanticMemory
+
+    state = get_app_state()
+    data_dir = Path(getattr(state, "data_dir", "/opt/mymilo/data"))
+    sem = SemanticMemory(data_dir)
+
+    # Caller format is "cf:email" or "token:..."; default to caller.
+    user_email = args.get("user_email", "")
+    if not user_email and caller.startswith("cf:"):
+        user_email = caller[3:]
+
+    def _ok(text: str, extra: dict | None = None) -> dict[str, Any]:
+        result: dict[str, Any] = {"content": [{"type": "text", "text": text}]}
+        if extra:
+            result.update(extra)
+        return result
+
+    if tool_name == "memory_get_profile":
+        profile = sem.get_profile(user_email)
+        return _ok(
+            f"Profile for {user_email or 'caller'}: {len(profile)} categories.",
+            {"profile": profile},
+        )
+
+    if tool_name == "memory_search_facts":
+        query = args.get("query", "")
+        results = sem.search_facts(user_email, query)
+        return _ok(
+            f"Found {len(results)} facts matching '{query}'.", {"facts": results}
+        )
+
+    if tool_name == "memory_add_fact":
+        fact_id = sem.add_fact(
+            user_email,
+            args.get("category", "general"),
+            args.get("key", ""),
+            args.get("value", ""),
+            source=f"mcp:{caller}",
+        )
+        return _ok(f"Fact stored: {fact_id}.", {"fact_id": fact_id})
+
+    if tool_name == "memory_delete_fact":
+        ok = sem.delete_fact(user_email, args.get("fact_id", ""))
+        return _ok(f"Fact deleted: {ok}.", {"deleted": ok})
+
+    return _ok(f"Unknown memory tool: {tool_name}", {"isError": True})
+
+
+async def _escalation_result_tool(
+    args: dict[str, Any], get_app_state
+) -> dict[str, Any]:
+    """Poll for a Wright-processed escalation result (closes the loop)."""
+    from .escalation import EscalationQueue
+
+    state = get_app_state()
+    data_dir = Path(getattr(state, "data_dir", "/opt/mymilo/data"))
+    esc_id = args.get("escalation_id", "")
+
+    # Sanitize: escalation IDs are hex (uuid4[:12]).
+    if not esc_id or not all(c.isalnum() or c in "-_" for c in esc_id):
+        return {
+            "content": [{"type": "text", "text": "Invalid escalation ID."}],
+            "isError": True,
+        }
+
+    queue = EscalationQueue(data_dir / "escalations")
+
+    result = queue.get_result(esc_id)
+    if result is not None:
+        return {
+            "content": [{"type": "text", "text": f"Result ready for {esc_id}."}],
+            "status": "complete",
+            "result": result,
+        }
+    if (queue.pending_dir / f"{esc_id}.json").exists():
+        return {
+            "content": [{"type": "text", "text": f"Escalation {esc_id} is pending."}],
+            "status": "pending",
+        }
+    return {
+        "content": [{"type": "text", "text": f"Escalation {esc_id} not found."}],
+        "status": "not_found",
+        "isError": True,
+    }
+
+
 async def _cloudflare_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Execute Cloudflare integration tools."""
     from .integrations.cloudflare import CloudflareClient
@@ -400,6 +490,14 @@ async def _call_tool(
     # ── Cloudflare (Phase 3) ─────────────────────────────────
     if tool_name.startswith("cf_"):
         return await _cloudflare_tool(tool_name, args)
+
+    # ── Semantic memory (v0.24.3) ────────────────────────────
+    if tool_name.startswith("memory_"):
+        return await _memory_tool(tool_name, args, caller, get_app_state)
+
+    # ── Escalation result polling (v0.24.3: closes the loop) ──
+    if tool_name == "escalation_result":
+        return await _escalation_result_tool(args, get_app_state)
 
     # For Phase 1, support the core tools via direct function calls.
     # Full HTTP mapping comes in Phase 1b.

@@ -635,11 +635,16 @@ def create_app(
                 sem.add_fact(user_email, category, key, value)
         except Exception:
             pass  # Fact extraction is best-effort
-        # Current date: models have training cutoffs; grounding them in
-        # today prevents "stuck in 2024" answers.
-        from datetime import UTC, datetime
+        # Current date/time: models have training cutoffs; grounding them in
+        # today prevents "stuck in 2024" answers. Time in user's timezone
+        # (America/Edmonton) — never leave a placeholder for the model.
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
 
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        _edm = ZoneInfo("America/Edmonton")
+        _now = datetime.now(_edm)
+        today = _now.strftime("%Y-%m-%d")
+        current_time = _now.strftime("%I:%M %p %Z")
         # ── v0.10.4: memory awareness ────────────────────────────
         # Tell the model it HAS past conversations. Without this, it
         # honestly (but wrongly) claims it cannot access history.
@@ -652,10 +657,13 @@ def create_app(
         messages = [
             {
                 "role": "system",
-                "content": f"Today is {today}. Your training data may be older; "
+                "content": f"Today is {today}. The current time is {current_time}. "
+                "Your training data may be older; "
                 "do not present past events as current. If you lack current "
                 "data for a question, say what you need instead of guessing. "
-                + memory_note,
+                "Never refuse a terse or ambiguous follow-up outright — use "
+                "the conversation context to interpret it, and ask a "
+                "clarifying question if you truly cannot tell. " + memory_note,
             },
             *messages,
         ]

@@ -2,21 +2,25 @@
 {% block title %}MyMilo — Chat{% endblock %}
 {% block content %}
 <div class="chat-wrap">
-  <div class="controls">
-    <label>Model
-      <select id="model"><option>loading…</option></select>
+  <div class="chat-toolbar">
+    <select id="sessionSel" title="Past chats" aria-label="Past chats">
+      <option value="">＋ New chat</option>
+    </select>
+    <select id="model" title="Model" aria-label="Model"><option>loading…</option></select>
+    <div class="toolbar-spacer"></div>
+    <label class="docs-toggle" title="Retrieve relevant document chunks and cite them">
+      <input type="checkbox" id="userag"> Docs
     </label>
-    <label title="Retrieve relevant document chunks and cite them">
-      <input type="checkbox" id="userag"> Use documents
-    </label>
-    <button id="clear">Clear</button>
-    <select id="sessionSel" title="Past chats"><option value="">New chat</option></select>
-    <span class="export-group" title="Export this chat">
-      <button id="expMd" type="button">MD</button>
-      <button id="expHtml" type="button">HTML</button>
-      <button id="expDocx" type="button">Word</button>
-      <button id="expCsv" type="button">CSV</button>
-    </span>
+    <div class="export-menu">
+      <button id="exportBtn" type="button" title="Export this chat" aria-label="Export">⤓</button>
+      <div id="exportDrop" class="export-drop" hidden>
+        <button type="button" data-fmt="md">Markdown (.md)</button>
+        <button type="button" data-fmt="html">Web page (.html)</button>
+        <button type="button" data-fmt="docx">Word (.docx)</button>
+        <button type="button" data-fmt="csv">Spreadsheet (.csv)</button>
+      </div>
+    </div>
+    <button id="clear" title="Clear chat" aria-label="Clear chat">🗑</button>
   </div>
   <div id="log" class="log" aria-live="polite"></div>
   <form id="form" class="composer">
@@ -223,7 +227,15 @@ document.getElementById('sessionSel').addEventListener('change', async (e) => {
   } catch (err) { addMsg('assistant', 'Could not load chat history.'); }
 });
 
-// ── Export UI ──────────────────────────────────────────────
+// ── Export UI (dropdown) ─────────────────────────────────────
+const exportBtn = document.getElementById('exportBtn');
+const exportDrop = document.getElementById('exportDrop');
+exportBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  exportDrop.hidden = !exportDrop.hidden;
+});
+document.addEventListener('click', () => { exportDrop.hidden = true; });
+exportDrop.addEventListener('click', (e) => { e.stopPropagation(); });
 async function exportChat(fmt) {
   const msgs = window.chatMessages || [];
   if (!msgs.length) { alert('Nothing to export yet.'); return; }
@@ -249,9 +261,11 @@ async function exportChat(fmt) {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   } catch (e) { alert('Export failed: ' + e.message); }
 }
-document.getElementById('expMd').addEventListener('click', () => exportChat('md'));
-document.getElementById('expHtml').addEventListener('click', () => exportChat('html'));
-document.getElementById('expDocx').addEventListener('click', () => exportChat('docx'));
-document.getElementById('expCsv').addEventListener('click', () => exportChat('csv'));
+exportDrop.querySelectorAll('button[data-fmt]').forEach(b => {
+  b.addEventListener('click', () => {
+    exportDrop.hidden = true;
+    exportChat(b.dataset.fmt);
+  });
+});
 </script>
 {% endblock %}

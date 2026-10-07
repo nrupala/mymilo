@@ -40,9 +40,7 @@ def wants_background(message: str) -> bool:
     return any(t in lowered for t in BACKGROUND_TRIGGERS)
 
 
-def route_for_complexity(
-    message: str, settings: Any, default: str = "local"
-) -> str:
+def route_for_complexity(message: str, settings: Any, default: str = "local") -> str:
     """Pick a model route based on query complexity.
 
     Simple/short -> local (fast, free, private).
@@ -52,8 +50,7 @@ def route_for_complexity(
     cloud_routes = [
         m.name
         for m in settings.models
-        if m.name in ("deepseek", "openrouter", "cloud")
-        and settings.api_key_for(m)
+        if m.name in ("deepseek", "openrouter", "cloud") and settings.api_key_for(m)
     ]
     if not cloud_routes:
         return default

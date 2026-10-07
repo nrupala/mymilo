@@ -210,6 +210,7 @@ async def _run_briefing(
         answer += " (citation check flagged unresolved references)"
     return answer
 
+
 async def _run_background_task(
     db: Any,
     job: dict[str, Any],

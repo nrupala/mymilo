@@ -197,7 +197,7 @@ def create_app(
                     app.state.last_skill_scan = asyncio.get_event_loop().time()
                 except Exception:
                     pass  # Best-effort; skills work via file matching
-            
+
             asyncio.create_task(_bg_skill_scan())
         if settings.scheduler.enabled:
             task = asyncio.create_task(scheduler_loop(app))

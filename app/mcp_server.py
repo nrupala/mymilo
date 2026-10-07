@@ -142,6 +142,9 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
             }
         elif req.method == "tools/call":
             result = await _call_tool(req.params, get_app_state, caller)
+        elif req.method == "escalate":
+            # Phase 2: Milo → Wright escalation
+            result = await _escalate(req.params, get_app_state, caller)
         else:
             return JsonRpcResponse(
                 id=req.id,
@@ -153,6 +156,44 @@ def create_mcp_router(mcp_dir: Path, get_app_state) -> APIRouter:
         return {"ok": True}
 
     return router
+
+
+async def _escalate(
+    params: dict[str, Any], get_app_state, caller: str
+) -> dict[str, Any]:
+    """Phase 2: Queue an escalation for Wright.
+
+    Milo calls this when a request exceeds its local capability.
+    Wright processes the queue and writes back results.
+    """
+    from .escalation import EscalationQueue
+
+    state = get_app_state()
+    queue_dir = Path(getattr(state, "data_dir", "/opt/mymilo/data")) / "escalations"
+    queue = EscalationQueue(queue_dir)
+
+    user_email = params.get("user_email", caller)
+    request_text = params.get("request", "")
+    context = params.get("context", {})
+    session_id = params.get("session_id", "")
+
+    if not request_text:
+        return {
+            "content": [{"type": "text", "text": "Escalation requires a request"}],
+            "isError": True,
+        }
+
+    esc_id = queue.submit(user_email, request_text, context, session_id)
+
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"Escalated to Wright (id: {esc_id}). Poll for result.",
+            }
+        ],
+        "escalation_id": esc_id,
+    }
 
 
 async def _call_tool(

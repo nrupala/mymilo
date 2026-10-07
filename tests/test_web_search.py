@@ -14,9 +14,7 @@ def test_wants_search():
 
 
 def test_format_search_context():
-    results = [
-        {"title": "Test", "url": "https://example.com", "text": "Some text"}
-    ]
+    results = [{"title": "Test", "url": "https://example.com", "text": "Some text"}]
     ctx = format_search_context(results)
     assert "Test" in ctx
     assert "https://example.com" in ctx

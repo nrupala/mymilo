@@ -49,6 +49,7 @@ from .events import EventBus
 from .ingest import IngestionError
 from .jobs import JobNotFoundError, JobService
 from .ledger import check_quota, current_month, month_spend, recommend
+from .orchestrate import route_for_complexity, wants_background
 from .planner import Planner, create_suggestion
 from .rag import build_rag_messages, rag_sources, verify_citations
 from .router import (
@@ -333,7 +334,10 @@ def create_app(
 
     @app.get("/v1/models", response_model=ModelList)
     async def list_models():
-        return ModelList(data=[ModelInfo(id=m.name) for m in settings.models])
+        models = [ModelInfo(id=m.name) for m in settings.models]
+        # "auto" is a virtual route: picks local vs cloud by complexity.
+        models.insert(0, ModelInfo(id="auto"))
+        return ModelList(data=models)
 
     @app.post("/v1/chat/completions")
     async def chat_completions(req: ChatCompletionRequest):
@@ -343,6 +347,44 @@ def create_app(
             )
         payload = req.model_dump(exclude_none=True)
         rag_block = payload.pop("rag", None)
+
+        # ── background trigger ─────────────────────────────────
+        # "in the background" etc. → create a job, return immediately.
+        user_text = req.messages[-1].content
+        if wants_background(user_text):
+            model = route_for_complexity(user_text, settings, default=req.model)
+            job = jobs.create(
+                JobCreate(
+                    name=f"Background: {user_text[:60]}",
+                    payload={
+                        "type": "background_task",
+                        "task": user_text,
+                        "model": model,
+                    },
+                )
+            )
+            # Kick it off now (scheduler will also pick it up).
+            asyncio.create_task(
+                run_job_now(app, job.id, triggered_by="chat-background")
+            )
+            return JSONResponse(
+                content={
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": (
+                                    "On it — working in the background. "
+                                    "I'll drop the answer here when it's done. "
+                                    f"(job {job.id[:8]})"
+                                ),
+                            }
+                        }
+                    ],
+                    "background_job_id": job.id,
+                    "model": model,
+                }
+            )
 
         # ── skills (always-on) ───────────────────────────────────
         # Match the message against skill triggers; a matched skill's
@@ -370,7 +412,14 @@ def create_app(
         else:
             payload["messages"] = messages
 
-        data = await router.chat_completion(req.model, payload)
+        # Resolve "auto" to the best route by complexity.
+        actual_model = req.model
+        if req.model == "auto":
+            actual_model = route_for_complexity(
+                user_text, settings, default=settings.default_model
+            )
+        data = await router.chat_completion(actual_model, payload)
+        data["routed_model"] = actual_model
 
         if retrieved:
             answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")

@@ -112,6 +112,9 @@ form.addEventListener('submit', async (e) => {
     } else {
       const c = (j.choices && j.choices[0] && j.choices[0].message) || {};
       let out = c.content || JSON.stringify(j);
+      if (j.background_job_id) {
+        pollBackgroundJob(j.background_job_id);
+      }
       if (j.active_skill) {
         out = '🛠 ' + j.active_skill + '\n\n' + out;
       }
@@ -127,6 +130,33 @@ form.addEventListener('submit', async (e) => {
     addMsg('assistant', friendly ? err.message : 'Request failed: ' + err.message);
   }
 });
+
+// ── background job polling ──────────────────────────────────────
+// After a background job starts, poll for its result and drop it in chat.
+let bgPollTimer = null;
+function pollBackgroundJob(jobId) {
+  if (bgPollTimer) clearInterval(bgPollTimer);
+  const started = Date.now();
+  bgPollTimer = setInterval(async () => {
+    if (Date.now() - started > 10 * 60 * 1000) { clearInterval(bgPollTimer); return; }
+    try {
+      const r = await fetch('/v1/jobs/' + jobId + '/runs');
+      const j = await r.json();
+      const runs = j.runs || j.data || [];
+      const done = runs.find(x => x.status === 'completed' || x.status === 'failed');
+      if (done) {
+        clearInterval(bgPollTimer);
+        const out = done.status === 'completed'
+          ? '✅ Background task done:\n\n' + (done.result_summary || '(no summary)')
+          : '❌ Background task failed: ' + (done.error || 'unknown error');
+        addMsg('assistant', out);
+      }
+    } catch (e) { /* keep polling */ }
+  }, 5000);
+}
+// Hook into the chat response handler above: if the response included a
+// background_job_id, start polling.
+
 
 document.getElementById('clear').addEventListener('click', () => { log.innerHTML = ''; });
 </script>

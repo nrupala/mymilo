@@ -15,6 +15,23 @@ main { max-width: 860px; margin: 0 auto; padding: 1.2rem; }
 .chat-wrap, .jobs-wrap { display: flex; flex-direction: column; gap: 1rem; }
 .controls { display: flex; gap: 1rem; align-items: center; }
 .controls label { color: var(--dim); }
+/* Chat toolbar: single clean row, wraps gracefully on narrow screens. */
+.chat-toolbar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.chat-toolbar select { max-width: 12rem; }
+.toolbar-spacer { flex: 1; }
+.docs-toggle { color: var(--dim); font-size: .85rem; display: flex;
+  align-items: center; gap: .3rem; white-space: nowrap; }
+.export-menu { position: relative; }
+#exportBtn { padding: .5rem .7rem; }
+.export-drop { position: absolute; right: 0; top: 110%; z-index: 20;
+  background: var(--panel); border: 1px solid #2a3642; border-radius: 8px;
+  min-width: 11rem; box-shadow: 0 8px 24px rgba(0,0,0,.45); overflow: hidden; }
+.export-drop button { display: block; width: 100%; text-align: left;
+  background: none; color: var(--ink); border: 0; border-radius: 0;
+  padding: .6rem .9rem; font-weight: 400; }
+.export-drop button:hover { background: #223040; filter: none; }
+#clear { padding: .5rem .7rem; background: var(--panel); color: var(--dim); }
+#clear:hover { color: var(--ink); filter: none; }
 select, input, textarea, button { font: inherit; }
 select, input, textarea { background: var(--panel); color: var(--ink);
   border: 1px solid #2a3642; border-radius: 6px; padding: .5rem .7rem; }

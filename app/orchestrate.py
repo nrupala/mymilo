@@ -31,6 +31,14 @@ CLOUD_SIGNALS = [
     "in detail",
     "comprehensive",
     "deep dive",
+    # Freshness signals: local model can't know these, escalate to cloud
+    # (which pairs with web search when available).
+    "latest",
+    "news",
+    "today",
+    "current",
+    "real-time",
+    "realtime",
 ]
 
 

@@ -413,6 +413,31 @@ def create_app(
                 {"role": "system", "content": skill["content"]},
                 *messages,
             ]
+            # Web search for freshness queries ("latest news on X").
+            from .web_search import exa_search, format_search_context, wants_search
+
+            if wants_search(user_text):
+                exa_key = (
+                    settings.api_key_for(settings.route_for("exa"))
+                    if settings.route_for("exa")
+                    else None
+                )
+                # Fallback: check env directly.
+                if not exa_key:
+                    import os
+
+                    exa_key = os.environ.get("MYMILO_EXA_API_KEY")
+                if exa_key:
+                    try:
+                        results = await exa_search(user_text, exa_key)
+                        ctx = format_search_context(results)
+                        if ctx:
+                            messages = [
+                                {"role": "system", "content": ctx},
+                                *messages,
+                            ]
+                    except Exception:  # noqa: BLE001 — search is best-effort
+                        pass
             # Live market data for "brief me on the market today".
             from .market_data import (
                 fetch_indices,

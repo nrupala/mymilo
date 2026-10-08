@@ -163,19 +163,48 @@ def get_skill_bundle() -> dict:
     Skills live on the server AND in the app: clients download this
     bundle, cache it locally, and match triggers on-device. The hash
     lets a client detect changes cheaply.
+
+    v0.33.1: the bundle contains ALL skills, not just those with
+    triggers — only ~a quarter of skills declare trigger phrases, and
+    the rest still belong on the device (for the local model and for
+    browsing). Trigger-less skills ship with an empty triggers list.
     """
     import hashlib
     import json as _json
 
-    skills = [
-        {
-            "name": s["name"],
-            "description": s["description"],
-            "triggers": s["triggers"],
-            "content": s["content"],
-        }
-        for s in _skill_cache
-    ]
+    skills: list[dict] = []
+    root = Path(_skill_cache_dir) if _skill_cache_dir else None
+    if root and root.is_dir():
+        for skill_md in sorted(root.glob("*/SKILL.md")):
+            try:
+                raw = skill_md.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            meta, body = parse_frontmatter(raw)
+            trigger_list = [
+                t.strip().lower()
+                for t in meta.get("triggers", "").split(",")
+                if t.strip()
+            ]
+            skills.append(
+                {
+                    "name": meta.get("name", skill_md.parent.name),
+                    "description": meta.get("description", ""),
+                    "triggers": trigger_list,
+                    "content": body,
+                }
+            )
+    else:
+        # Fall back to the trigger cache if the dir is unknown.
+        skills = [
+            {
+                "name": s["name"],
+                "description": s["description"],
+                "triggers": s["triggers"],
+                "content": s["content"],
+            }
+            for s in _skill_cache
+        ]
     payload = _json.dumps(skills, sort_keys=True)
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return {"hash": digest, "count": len(skills), "skills": skills}

@@ -85,3 +85,38 @@ def test_user_isolation():
         # Cannot delete another user's session.
         m.delete_session(alice, "bob@example.com")
         assert len(m.list_sessions("alice@example.com")) == 1
+
+
+def test_session_summary():
+    """v0.28.0: session summaries for long chats."""
+    with tempfile.TemporaryDirectory() as d:
+        m = MemoryStore(Path(d) / "test.db")
+        sid = m.create_session()
+
+        # No summary initially
+        assert m.get_summary(sid) is None
+
+        # Save a summary
+        m.save_summary(sid, "Discussed budgets and stocks", 20)
+        s = m.get_summary(sid)
+        assert s is not None
+        assert s["summary"] == "Discussed budgets and stocks"
+        assert s["summarized_up_to"] == 20
+
+        # Update it
+        m.save_summary(sid, "Updated summary", 30)
+        s = m.get_summary(sid)
+        assert s["summary"] == "Updated summary"
+        assert s["summarized_up_to"] == 30
+
+
+def test_message_count():
+    """v0.28.0: count messages for summarization threshold."""
+    with tempfile.TemporaryDirectory() as d:
+        m = MemoryStore(Path(d) / "test.db")
+        sid = m.create_session()
+        assert m.count_messages(sid) == 0
+
+        for i in range(5):
+            m.add_message(sid, "user", f"q{i}")
+        assert m.count_messages(sid) == 5

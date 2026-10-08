@@ -264,9 +264,14 @@ def create_app(
             content={
                 "error": {
                     "message": (
-                        f"backend for model '{exc.model}' unreachable at {exc.base_url}"
+                        "Milo can't reach the AI model right now. "
+                        "The model server may be starting up or temporarily down. "
+                        "Please try again in a moment."
                     ),
                     "type": "backend_unreachable",
+                    "detail": (
+                        f"backend for model '{exc.model}' unreachable at {exc.base_url}"
+                    ),
                 }
             },
         )
@@ -277,7 +282,10 @@ def create_app(
             status_code=502,
             content={
                 "error": {
-                    "message": f"backend for model '{exc.model}' errored",
+                    "message": (
+                        "The AI model returned an error. "
+                        "Please try again, or try a different model."
+                    ),
                     "type": "backend_error",
                     "backend_status": exc.status_code,
                     "detail": exc.detail,
@@ -567,13 +575,15 @@ def create_app(
 
         # ── v0.28.0: summarization for long chats ──────────────────
         # If the session is long, summarize old turns so the local
-        # model's window doesn't choke. Best-effort, never blocks.
+        # model's window doesn't choke. Runs in background — never
+        # blocks the chat response. Uses existing summary if present.
         summary_context = ""
         try:
             from .summarize import get_summary_context, maybe_summarize_session
 
-            # Trigger summarization check (runs the model if needed)
-            await maybe_summarize_session(memory, router, session_id)
+            # Fire-and-forget: summarize in background, don't wait
+            asyncio.create_task(maybe_summarize_session(memory, router, session_id))
+            # Use whatever summary exists right now (may be from last turn)
             summary_context = get_summary_context(memory, session_id)
         except Exception:
             pass

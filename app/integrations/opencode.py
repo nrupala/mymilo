@@ -61,10 +61,13 @@ class OpenCodeBridgeClient:
 
     async def list_sessions(self) -> list[dict]:
         """List active OpenCode sessions."""
-        result = await self._mcp_call("tools/call", {
-            "name": "oc_list_sessions",
-            "arguments": {},
-        })
+        result = await self._mcp_call(
+            "tools/call",
+            {
+                "name": "oc_list_sessions",
+                "arguments": {},
+            },
+        )
         return self._parse_content(result)
 
     async def dispatch_task(
@@ -74,7 +77,7 @@ class OpenCodeBridgeClient:
         context: dict | None = None,
     ) -> dict:
         """Dispatch a coding task to OpenCode.
-        
+
         Args:
             task: Clear description of what to do
             repo: Repository name (e.g., "mymilo")
@@ -86,19 +89,25 @@ class OpenCodeBridgeClient:
         if context:
             ctx_str = "\n".join(f"{k}: {v}" for k, v in context.items())
             prompt = f"{prompt}\n\nContext:\n{ctx_str}"
-        
-        result = await self._mcp_call("tools/call", {
-            "name": "oc_send_prompt",
-            "arguments": {"prompt": prompt},
-        })
+
+        result = await self._mcp_call(
+            "tools/call",
+            {
+                "name": "oc_send_prompt",
+                "arguments": {"prompt": prompt},
+            },
+        )
         return self._parse_content(result)
 
     async def get_session_status(self, session_id: str) -> dict:
         """Get the status of an OpenCode session."""
-        result = await self._mcp_call("tools/call", {
-            "name": "oc_get_session",
-            "arguments": {"session_id": session_id},
-        })
+        result = await self._mcp_call(
+            "tools/call",
+            {
+                "name": "oc_get_session",
+                "arguments": {"session_id": session_id},
+            },
+        )
         return self._parse_content(result)
 
     def _parse_content(self, result: Any) -> Any:
@@ -111,6 +120,7 @@ class OpenCodeBridgeClient:
                     text = first.get("text", "")
                     # Try to parse as JSON, fall back to raw text
                     import json
+
                     try:
                         return json.loads(text)
                     except (json.JSONDecodeError, ValueError):

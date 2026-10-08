@@ -60,6 +60,18 @@ class MemoryStore:
                 "CREATE INDEX IF NOT EXISTS idx_sess_user "
                 "ON sessions(user_email, updated_at DESC)"
             )
+            # v0.28.0: session summaries for long chats
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS session_summaries (
+                    session_id TEXT PRIMARY KEY REFERENCES sessions(id),
+                    summary TEXT NOT NULL,
+                    summarized_up_to INTEGER NOT NULL DEFAULT 0,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
 
     def create_session(self, user_email: str = "", title: str = "New chat") -> str:
         sid = uuid.uuid4().hex[:12]
@@ -147,3 +159,63 @@ class MemoryStore:
             for m in msgs
             if m["role"] in ("user", "assistant")
         ]
+
+    def get_summary(self, session_id: str) -> dict | None:
+        """Get the stored summary for a session, if any."""
+        with sqlite3.connect(self.path) as c:
+            c.row_factory = sqlite3.Row
+            row = c.execute(
+                "SELECT summary, summarized_up_to, updated_at"
+                " FROM session_summaries WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def save_summary(
+        self, session_id: str, summary: str, summarized_up_to: int
+    ) -> None:
+        """Store or update the summary for a session."""
+        now = time.time()
+        with sqlite3.connect(self.path) as c:
+            c.execute(
+                "INSERT INTO session_summaries"
+                " (session_id, summary, summarized_up_to, created_at, updated_at)"
+                " VALUES (?,?,?,?,?)"
+                " ON CONFLICT(session_id) DO UPDATE SET"
+                " summary=excluded.summary,"
+                " summarized_up_to=excluded.summarized_up_to,"
+                " updated_at=excluded.updated_at",
+                (session_id, summary, summarized_up_to, now, now),
+            )
+
+    def count_messages(self, session_id: str) -> int:
+        """Count messages in a session."""
+        with sqlite3.connect(self.path) as c:
+            row = c.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+            return row[0] if row else 0
+
+    def get_messages_before(
+        self, session_id: str, before_id: int, limit: int = 50
+    ) -> list[dict]:
+        """Get messages with id < before_id, oldest first."""
+        with sqlite3.connect(self.path) as c:
+            c.row_factory = sqlite3.Row
+            rows = c.execute(
+                "SELECT id, role, content FROM messages"
+                " WHERE session_id=? AND id < ?"
+                " ORDER BY id ASC LIMIT ?",
+                (session_id, before_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_max_message_id(self, session_id: str) -> int:
+        """Get the highest message id in a session."""
+        with sqlite3.connect(self.path) as c:
+            row = c.execute(
+                "SELECT MAX(id) FROM messages WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+            return row[0] if row and row[0] else 0

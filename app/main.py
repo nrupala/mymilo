@@ -565,6 +565,19 @@ def create_app(
         session_id = req.session_id or memory.create_session(user_email)
         history = memory.recent_context(session_id, max_turns=10)
 
+        # ── v0.28.0: summarization for long chats ──────────────────
+        # If the session is long, summarize old turns so the local
+        # model's window doesn't choke. Best-effort, never blocks.
+        summary_context = ""
+        try:
+            from .summarize import get_summary_context, maybe_summarize_session
+
+            # Trigger summarization check (runs the model if needed)
+            await maybe_summarize_session(memory, router, session_id)
+            summary_context = get_summary_context(memory, session_id)
+        except Exception:
+            pass
+
         # ── v0.21.0: episodic memory ─────────────────────────────
         # Pull relevant past episodes for continuity of thought.
         from .episodic import EpisodicMemory
@@ -614,6 +627,16 @@ def create_app(
             )
             insert_at = 1
         messages[insert_at:insert_at] = history
+        # Inject session summary (v0.28.0) before history if present
+        if summary_context:
+            messages.insert(
+                insert_at,
+                {
+                    "role": "system",
+                    "content": summary_context,
+                },
+            )
+            insert_at += 1
         # Inject episodic memory (past relevant sessions) after history
         if episode_context:
             messages.insert(

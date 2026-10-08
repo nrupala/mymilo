@@ -191,17 +191,46 @@ def create_app(
         if settings.skills.enabled:
             # Drop-a-file skills are indexed in background (v0.23.1).
             # Blocking startup on 73 skills hangs; index async instead.
+            # v0.30.0: also build the in-memory trigger cache (no disk I/O per message).
+            from .skills import refresh_skill_cache
+
+            refresh_skill_cache(skills_dir)
+
             async def _bg_skill_scan():
                 try:
                     await scan_skills(db, docs, skills_dir)
+                    # Refresh the trigger cache after each background scan
+                    refresh_skill_cache(skills_dir)
                     app.state.last_skill_scan = asyncio.get_event_loop().time()
                 except Exception:
                     pass  # Best-effort; skills work via file matching
 
             asyncio.create_task(_bg_skill_scan())
+
+        # v0.30.0: SemanticMemory singleton — eliminates file I/O per message.
+        # Held in app.state, flushed to disk every 60s by background task.
+        from .semantic import SemanticMemory
+
+        app.state.semantic = SemanticMemory(Path("/opt/mymilo/data"))
+
+        async def _bg_semantic_flush():
+            while True:
+                await asyncio.sleep(60)
+                try:
+                    app.state.semantic.save()
+                except Exception:
+                    pass
+
+        asyncio.create_task(_bg_semantic_flush())
+
         if settings.scheduler.enabled:
             task = asyncio.create_task(scheduler_loop(app))
         yield
+        # Flush semantic facts on shutdown
+        try:
+            app.state.semantic.save()
+        except Exception:
+            pass
         if task is not None:
             task.cancel()
 
@@ -659,10 +688,11 @@ def create_app(
         memory.add_message(session_id, "user", user_text)
 
         # ── v0.23.0: extract semantic facts from user message ──
-        from .semantic import SemanticMemory, extract_facts_simple
+        # v0.30.0: uses app.state.semantic singleton (no file I/O per message)
+        from .semantic import extract_facts_simple
 
         try:
-            sem = SemanticMemory(Path("/opt/mymilo/data"))
+            sem = app.state.semantic
             facts = extract_facts_simple(user_text)
             for category, key, value in facts:
                 sem.add_fact(user_email, category, key, value)
@@ -1026,19 +1056,15 @@ def create_app(
     @app.get("/v1/profile")
     async def get_profile(request: Request):
         """Get user's semantic profile (facts grouped by category)."""
-        from .semantic import SemanticMemory
-
         user_email = request.headers.get("cf-access-authenticated-user-email", "")
-        sem = SemanticMemory(Path("/opt/mymilo/data"))
+        sem = app.state.semantic
         return sem.get_profile(user_email)
 
     @app.delete("/v1/profile/facts/{fact_id}")
     async def delete_fact(fact_id: str, request: Request):
         """Delete a fact (user request)."""
-        from .semantic import SemanticMemory
-
         user_email = request.headers.get("cf-access-authenticated-user-email", "")
-        sem = SemanticMemory(Path("/opt/mymilo/data"))
+        sem = app.state.semantic
         ok = sem.delete_fact(user_email, fact_id)
         return {"deleted": ok}
 

@@ -22,6 +22,7 @@ class SemanticMemory:
         self.data_dir = data_dir
         self.facts_file = data_dir / "semantic_facts.json"
         self.facts: dict[str, dict] = self._load()
+        self._dirty = False  # v0.30.0: batch saves instead of per-fact
 
     def _load(self) -> dict[str, dict]:
         if self.facts_file.exists():
@@ -33,6 +34,12 @@ class SemanticMemory:
 
     def _save(self):
         self.facts_file.write_text(json.dumps(self.facts, indent=2))
+        self._dirty = False
+
+    def save(self):
+        """Flush pending changes to disk (v0.30.0: batched)."""
+        if self._dirty:
+            self._save()
 
     def add_fact(
         self,
@@ -56,7 +63,8 @@ class SemanticMemory:
             "confidence": confidence,
             "updated_at": time.time(),
         }
-        self._save()
+        # v0.30.0: mark dirty instead of saving immediately (batched flush)
+        self._dirty = True
         return fact_id
 
     def get_fact(self, user_email: str, category: str, key: str) -> dict | None:
@@ -89,7 +97,7 @@ class SemanticMemory:
         """Delete a fact (user request)."""
         if fact_id in self.facts.get(user_email, {}):
             del self.facts[user_email][fact_id]
-            self._save()
+            self._dirty = True  # v0.30.0: batched save
             return True
         return False
 

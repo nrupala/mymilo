@@ -59,6 +59,11 @@ def test_budget_triggers():
     assert r and r["name"] == "budget-engine"
 
 
+def test_opencode_triggers():
+    r = match_skill("fix this bug in mymilo", SKILLS_DIR)
+    assert r and r["name"] == "opencode-bridge"
+
+
 def test_travel_triggers():
     r = match_skill("find me a cheap flight to Delhi", SKILLS_DIR)
     assert r and r["name"] == "travel-fares"

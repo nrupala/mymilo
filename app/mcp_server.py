@@ -78,6 +78,17 @@ def load_catalog(mcp_dir: Path) -> dict:
         except Exception:
             pass
 
+    # Add OpenCode bridge tools (v0.27.0)
+    oc_tools_path = mcp_dir / "opencode-tools.json"
+    if oc_tools_path.exists():
+        try:
+            oc_tools = json.loads(oc_tools_path.read_text())
+            if isinstance(oc_tools, dict):
+                oc_tools = oc_tools.get("tools", [])
+            tools.extend(oc_tools)
+        except Exception:
+            pass
+
     return {"tools": tools}
 
 
@@ -431,6 +442,70 @@ async def _github_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+async def _opencode_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Execute OpenCode bridge tools (v0.27.0)."""
+    from .integrations.opencode import OpenCodeBridgeClient
+
+    try:
+        client = OpenCodeBridgeClient()
+    except ValueError:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": "OpenCode bridge not configured (OC_BRIDGE_TOKEN missing)",
+                }
+            ],
+            "isError": True,
+        }
+
+    try:
+        if tool_name == "opencode_dispatch":
+            task = args.get("task", "")
+            if not task:
+                return {
+                    "content": [
+                        {"type": "text", "text": "Dispatch requires a task description"}
+                    ],
+                    "isError": True,
+                }
+            result = await client.dispatch_task(
+                task=task,
+                repo=args.get("repo"),
+                context=args.get("context"),
+            )
+            return {"content": [{"type": "text", "text": str(result)}]}
+
+        elif tool_name == "opencode_status":
+            session_id = args.get("session_id", "")
+            if not session_id:
+                return {
+                    "content": [
+                        {"type": "text", "text": "Status check requires a session_id"}
+                    ],
+                    "isError": True,
+                }
+            result = await client.get_session_status(session_id)
+            return {"content": [{"type": "text", "text": str(result)}]}
+
+        elif tool_name == "opencode_sessions":
+            result = await client.list_sessions()
+            return {"content": [{"type": "text", "text": str(result)}]}
+
+        else:
+            return {
+                "content": [
+                    {"type": "text", "text": f"Unknown OpenCode tool: {tool_name}"}
+                ],
+                "isError": True,
+            }
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": f"OpenCode bridge error: {e}"}],
+            "isError": True,
+        }
+
+
 async def _escalate(
     params: dict[str, Any], get_app_state, caller: str
 ) -> dict[str, Any]:
@@ -498,6 +573,10 @@ async def _call_tool(
     # ── Escalation result polling (v0.24.3: closes the loop) ──
     if tool_name == "escalation_result":
         return await _escalation_result_tool(args, get_app_state)
+
+    # ── OpenCode bridge (v0.27.0: Milo as foreman) ────────────
+    if tool_name.startswith("opencode_"):
+        return await _opencode_tool(tool_name, args)
 
     # For Phase 1, support the core tools via direct function calls.
     # Full HTTP mapping comes in Phase 1b.

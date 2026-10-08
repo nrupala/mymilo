@@ -1301,6 +1301,13 @@ agentic OS. Version {__version__}.
             request, "index.html", {"version": __version__}
         )
 
+    @app.get("/devices", response_class=HTMLResponse)
+    async def devices_page(request: Request):
+        """v0.32.0: device management — register/revoke native app tokens."""
+        return templates.TemplateResponse(
+            request, "devices.html", {"version": __version__}
+        )
+
     @app.get("/jobs", response_class=HTMLResponse)
     async def jobs_page(request: Request):
         return templates.TemplateResponse(

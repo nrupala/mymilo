@@ -558,7 +558,9 @@ def create_app(
 
         from app.skills import get_skill_bundle
 
-        _resolve_user(request)  # 401 if unauthenticated
+        email = _resolve_user(request)
+        if not email:
+            raise HTTPException(status_code=401, detail="Authentication required")
         bundle = get_skill_bundle()
         return {
             "version": __version__,

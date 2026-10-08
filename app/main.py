@@ -21,6 +21,7 @@ import asyncio
 import csv
 import io
 import json
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -266,6 +267,27 @@ def create_app(
         return ""
 
     app.state.resolve_user = _resolve_user
+
+    # ── v0.34.0: API-host guard ──────────────────────────────────
+    # Native clients reach the API via mymilo-api.aimlds.org, a tunnel
+    # hostname WITHOUT the browser Cloudflare Access app (Access
+    # intercepts API calls with an HTML login page — found live
+    # 2026-10-08). On that host the app's own auth is the only gate:
+    # only /v1/* paths exist, and every request must resolve a user
+    # (device token). The browser host is untouched.
+    api_host = os.environ.get("MYMILO_API_HOST", "mymilo-api.aimlds.org")
+
+    @app.middleware("http")
+    async def api_host_guard(request: Request, call_next):
+        host = request.headers.get("host", "").split(":")[0].lower()
+        if host == api_host:
+            if not request.url.path.startswith("/v1/"):
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            if not _resolve_user(request):
+                return JSONResponse(
+                    {"detail": "Authentication required"}, status_code=401
+                )
+        return await call_next(request)
 
     # ── v0.13.0: MCP server (Phase 1 agentic) ────────────────────
     # Exposes Milo's tools via Model Context Protocol for agent-to-agent calls.

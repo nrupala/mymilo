@@ -50,16 +50,19 @@ class EpisodicMemory:
         """Search past sessions for relevant episodes.
 
         v1: keyword matching. v2: vector search when embeddings stable.
+        v0.30.0: bounded to 10 recent sessions × 10 messages (was 50×50=2500).
         """
         query_lower = query.lower()
         query_words = set(query_lower.split())
 
-        sessions = self.store.list_sessions(user_email, limit=50)
+        # v0.30.0: limit to 10 most recent sessions (was 50)
+        sessions = self.store.list_sessions(user_email, limit=10)
         scored = []
 
         for session in sessions:
             session_id = session["id"]
-            messages = self.store.get_messages(session_id, limit=50)
+            # v0.30.0: only 10 messages per session for scoring (was 50)
+            messages = self.store.get_messages(session_id, limit=10)
 
             # Score by keyword overlap
             text = " ".join(m.get("content", "").lower() for m in messages)

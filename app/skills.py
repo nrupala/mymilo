@@ -117,13 +117,70 @@ def resolve_skills_dir(configured: str | Path, base_dir: str | Path) -> Path:
     return p if p.is_absolute() else Path(base_dir) / p
 
 
+# v0.30.0: in-memory skill trigger cache — eliminates 82 file reads per message.
+# Built once at startup, refreshed by the background skill scan.
+_skill_cache: list[dict] = []
+_skill_cache_dir: str | None = None
+
+
+def refresh_skill_cache(skills_dir: str | Path) -> int:
+    """Build the in-memory trigger cache from SKILL.md files.
+
+    Returns the number of skills cached. Called at startup and by the
+    background skill scan after each poll.
+    """
+    global _skill_cache, _skill_cache_dir
+    root = Path(skills_dir)
+    _skill_cache_dir = str(root)
+    cache = []
+    if root.is_dir():
+        for skill_md in sorted(root.glob("*/SKILL.md")):
+            try:
+                raw = skill_md.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            meta, body = parse_frontmatter(raw)
+            triggers = meta.get("triggers", "")
+            if not triggers:
+                continue
+            trigger_list = [t.strip().lower() for t in triggers.split(",") if t.strip()]
+            if trigger_list:
+                cache.append(
+                    {
+                        "name": meta.get("name", skill_md.parent.name),
+                        "description": meta.get("description", ""),
+                        "content": body,
+                        "triggers": trigger_list,
+                    }
+                )
+    _skill_cache = cache
+    return len(cache)
+
+
 def match_skill(message: str, skills_dir: str | Path) -> dict[str, str] | None:
     """Match a chat message against skill triggers (case-insensitive).
 
     Returns {"name": ..., "description": ..., "content": ...} for the first
     skill whose trigger phrase appears in the message, or None. Deterministic:
     skills are checked in sorted directory order so matches are stable.
+
+    v0.30.0: uses the in-memory cache (no disk I/O). Falls back to direct
+    scan if the cache is empty or for a different directory.
     """
+    # Use cache if it's for this directory
+    if _skill_cache and _skill_cache_dir == str(skills_dir):
+        lowered = message.lower()
+        for skill in _skill_cache:
+            for trigger in skill["triggers"]:
+                if trigger and trigger in lowered:
+                    return {
+                        "name": skill["name"],
+                        "description": skill["description"],
+                        "content": skill["content"],
+                    }
+        return None
+
+    # Fallback: direct disk scan (cache miss or different dir)
     root = Path(skills_dir)
     if not root.is_dir():
         return None

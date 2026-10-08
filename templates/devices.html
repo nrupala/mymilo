@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyMilo — Devices</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #0e1116; color: #e8edf4; margin: 0; padding: 20px; }
+  .card { max-width: 520px; margin: 24px auto; background: #171c24; border-radius: 14px; padding: 22px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p { color: #8b96a5; line-height: 1.5; font-size: 14px; }
+  button { background: #4f8cff; color: #fff; border: 0; border-radius: 9px; padding: 11px 16px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button.danger { background: transparent; color: #ff5d5d; border: 1px solid #ff5d5d; font-weight: 400; padding: 6px 10px; font-size: 13px; }
+  .token-box { display: none; margin-top: 16px; background: #1f2632; border: 1px solid #2c3646; border-radius: 10px; padding: 14px; }
+  .token-box code { word-break: break-all; font-size: 15px; color: #3ddc84; }
+  .device { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #232b38; font-size: 14px; }
+  .warn { color: #ffb84f; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📱 My devices</h1>
+  <p>Register a device to connect the MyMilo Android app. The token is shown <b>once</b> — paste it into the app right away.</p>
+  <button id="register-btn">Register new device</button>
+  <div class="token-box" id="token-box">
+    <p class="warn">Copy this token now — it won't be shown again:</p>
+    <code id="token-text"></code><br><br>
+    <button id="copy-btn">Copy token</button>
+  </div>
+  <div id="device-list" style="margin-top:18px"></div>
+  <p><a href="/" style="color:#4f8cff">← Back to MyMilo</a></p>
+</div>
+<script>
+async function loadDevices() {
+  const r = await fetch('/v1/devices');
+  const j = await r.json();
+  const list = document.getElementById('device-list');
+  list.innerHTML = '';
+  (j.devices || []).forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'device';
+    const label = document.createElement('span');
+    label.textContent = (d.name || 'Device') + ' · ' + (d.platform || '') + (d.revoked ? ' (revoked)' : '');
+    div.appendChild(label);
+    if (!d.revoked) {
+      const btn = document.createElement('button');
+      btn.className = 'danger';
+      btn.textContent = 'Revoke';
+      btn.onclick = async () => { await fetch('/v1/devices/' + d.id, { method: 'DELETE' }); loadDevices(); };
+      div.appendChild(btn);
+    }
+    list.appendChild(div);
+  });
+}
+document.getElementById('register-btn').onclick = async () => {
+  const name = prompt('Name this device (e.g. My Pixel):', 'Android phone');
+  if (name === null) return;
+  const r = await fetch('/v1/devices/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, platform: 'android' })
+  });
+  const j = await r.json();
+  if (j.token) {
+    document.getElementById('token-text').textContent = j.token;
+    document.getElementById('token-box').style.display = 'block';
+    loadDevices();
+  } else {
+    alert('Registration failed: ' + (j.detail || 'unknown error'));
+  }
+};
+document.getElementById('copy-btn').onclick = async () => {
+  const t = document.getElementById('token-text').textContent;
+  try { await navigator.clipboard.writeText(t); alert('Token copied.'); } catch { alert('Copy failed — long-press the token to copy it.'); }
+};
+loadDevices();
+</script>
+</body>
+</html>

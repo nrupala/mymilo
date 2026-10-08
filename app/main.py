@@ -213,6 +213,11 @@ def create_app(
 
         app.state.semantic = SemanticMemory(Path("/opt/mymilo/data"))
 
+        # v0.31.0: Device token store for native clients.
+        from .devices import DeviceStore
+
+        app.state.devices = DeviceStore(Path("/opt/mymilo/data/memory.db"))
+
         async def _bg_semantic_flush():
             while True:
                 await asyncio.sleep(60)
@@ -242,6 +247,25 @@ def create_app(
     app.state.docs = docs
     app.state.skills_dir = skills_dir
     app.state.last_skill_scan = 0.0
+
+    def _resolve_user(request: Request) -> str:
+        """Resolve user identity: CF Access header (browser) or
+        Bearer device token (native client, v0.31.0)."""
+        email = request.headers.get("cf-access-authenticated-user-email", "")
+        if email:
+            return email
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+            try:
+                resolved = app.state.devices.resolve(token)
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+        return ""
+
+    app.state.resolve_user = _resolve_user
 
     # ── v0.13.0: MCP server (Phase 1 agentic) ────────────────────
     # Exposes Milo's tools via Model Context Protocol for agent-to-agent calls.
@@ -466,8 +490,98 @@ def create_app(
 
     # ── v0.10.0: session memory endpoints ──────────────────────
     # ── v0.11.0: scoped per user (Cloudflare Access email header) ──
+    # ── v0.31.0: also accepts Bearer device token (native clients) ──
     def _user_email(request: Request) -> str:
-        return request.headers.get("cf-access-authenticated-user-email", "")
+        return _resolve_user(request)
+
+    # ── v0.31.0: device registration for native clients ─────────
+    @app.post("/v1/devices/register")
+    async def register_device(request: Request):
+        """Register a native device; returns a one-time bearer token."""
+        email = request.headers.get("cf-access-authenticated-user-email", "")
+        if not email:
+            raise HTTPException(
+                status_code=401,
+                detail="Device registration requires browser sign-in (CF Access)",
+            )
+        body = await request.json()
+        device_id, token = app.state.devices.register(
+            email,
+            name=body.get("name", ""),
+            platform=body.get("platform", ""),
+        )
+        return {"device_id": device_id, "token": token}
+
+    @app.get("/v1/devices")
+    async def list_devices(request: Request):
+        email = _user_email(request)
+        return {"devices": app.state.devices.list_devices(email)}
+
+    @app.delete("/v1/devices/{device_id}")
+    async def revoke_device(device_id: str, request: Request):
+        email = _user_email(request)
+        ok = app.state.devices.revoke(email, device_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Device not found")
+        return {"revoked": device_id}
+
+    # ── v0.31.0: client config for native apps ──────────────────
+    @app.get("/v1/client/config")
+    async def client_config(request: Request):
+        """Config the native client uses — tunable without an app release."""
+        return {
+            "version": __version__,
+            "sync_interval_seconds": 300,
+            "local_model_max_tokens": 2048,
+            "complexity_threshold_chars": 500,
+            "skills_bundle_version": __version__,
+            "features": {
+                "streaming": False,
+                "offline_queue": True,
+                "local_skills": True,
+            },
+        }
+
+    # ── v0.31.0: sync endpoints (offline-first) ─────────────────
+    @app.get("/v1/sync/sessions")
+    async def sync_sessions(request: Request, since: float = 0):
+        """Sessions changed since the given timestamp (delta sync)."""
+        email = _user_email(request)
+        sessions = memory.list_sessions(email, limit=100)
+        changed = [s for s in sessions if s["updated_at"] > since]
+        out = []
+        for s in changed:
+            out.append(
+                {
+                    "id": s["id"],
+                    "title": s["title"],
+                    "updated_at": s["updated_at"],
+                    "messages": memory.get_messages(s["id"], email),
+                }
+            )
+        return {"sessions": out, "server_time": __import__("time").time()}
+
+    @app.post("/v1/sync/push")
+    async def sync_push(request: Request):
+        """Push locally-created sessions/messages from a native client."""
+        email = _user_email(request)
+        body = await request.json()
+        imported = 0
+        for sess in body.get("sessions", []):
+            sid = sess.get("id")
+            if not sid:
+                continue
+            # Create the session server-side if it doesn't exist yet
+            existing = [s["id"] for s in memory.list_sessions(email, limit=1000)]
+            if sid not in existing:
+                sid = memory.create_session(email, sess.get("title", "New chat"))
+            for msg in sess.get("messages", []):
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                if role in ("user", "assistant") and content:
+                    memory.add_message(sid, role, content)
+                    imported += 1
+        return {"imported": imported}
 
     @app.get("/v1/sessions")
     async def list_sessions(request: Request):
@@ -503,7 +617,8 @@ def create_app(
     @app.post("/v1/chat/completions")
     async def chat_completions(req: ChatCompletionRequest, request: Request):
         # v0.11.0: user identity from Cloudflare Access.
-        user_email = request.headers.get("cf-access-authenticated-user-email", "")
+        # v0.31.0: also accepts Bearer device token (native clients).
+        user_email = _resolve_user(request)
         if req.stream:
             raise HTTPException(
                 status_code=400, detail="streaming is not implemented in this phase"

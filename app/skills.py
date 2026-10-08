@@ -157,6 +157,30 @@ def refresh_skill_cache(skills_dir: str | Path) -> int:
     return len(cache)
 
 
+def get_skill_bundle() -> dict:
+    """v0.33.0: the full skill bundle for native clients (dual-homing).
+
+    Skills live on the server AND in the app: clients download this
+    bundle, cache it locally, and match triggers on-device. The hash
+    lets a client detect changes cheaply.
+    """
+    import hashlib
+    import json as _json
+
+    skills = [
+        {
+            "name": s["name"],
+            "description": s["description"],
+            "triggers": s["triggers"],
+            "content": s["content"],
+        }
+        for s in _skill_cache
+    ]
+    payload = _json.dumps(skills, sort_keys=True)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return {"hash": digest, "count": len(skills), "skills": skills}
+
+
 def match_skill(message: str, skills_dir: str | Path) -> dict[str, str] | None:
     """Match a chat message against skill triggers (case-insensitive).
 

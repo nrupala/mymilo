@@ -529,17 +529,42 @@ def create_app(
     @app.get("/v1/client/config")
     async def client_config(request: Request):
         """Config the native client uses — tunable without an app release."""
+
+        from app.skills import get_skill_bundle
+
         return {
             "version": __version__,
             "sync_interval_seconds": 300,
             "local_model_max_tokens": 2048,
             "complexity_threshold_chars": 500,
             "skills_bundle_version": __version__,
+            "skills_bundle_hash": get_skill_bundle()["hash"],
             "features": {
                 "streaming": False,
                 "offline_queue": True,
                 "local_skills": True,
             },
+        }
+
+    # ── v0.33.0: skills bundle (dual-homed skills) ──────────────
+    @app.get("/v1/skills/bundle")
+    async def skills_bundle(request: Request):
+        """Full skill bundle for native clients.
+
+        Skills are dual-homed: server is the source of truth, the app
+        caches this bundle and matches triggers on-device. Authenticated
+        via CF Access header or device bearer token.
+        """
+
+        from app.skills import get_skill_bundle
+
+        _resolve_user(request)  # 401 if unauthenticated
+        bundle = get_skill_bundle()
+        return {
+            "version": __version__,
+            "hash": bundle["hash"],
+            "count": bundle["count"],
+            "skills": bundle["skills"],
         }
 
     # ── v0.31.0: sync endpoints (offline-first) ─────────────────

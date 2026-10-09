@@ -449,6 +449,16 @@ def create_app(
         embeddings_ok = (
             await docs.embedder.check() if hasattr(docs.embedder, "check") else True
         )
+        engine = None
+        try:
+            from datetime import UTC, datetime, timedelta
+
+            from .telemetry import shape_rollup
+
+            since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+            engine = shape_rollup(db.telemetry_rollup(since), 1)
+        except Exception:  # noqa: BLE001 — health must not break on telemetry
+            engine = None
         return {
             "status": "ok",
             "version": __version__,
@@ -458,6 +468,7 @@ def create_app(
                 "ok": embeddings_ok,
             },
             "routes": router.route_stats(),
+            "engine": engine,
         }
 
     @app.post("/v1/export")
@@ -1058,6 +1069,18 @@ def create_app(
                     )
                     plan.trimmed_messages = dropped
             if not plan.fits:
+                try:
+                    db.record_telemetry(
+                        route=actual_model,
+                        status="refused_oversize",
+                        estimate_source=plan.estimate_source,
+                        estimated_input=plan.estimated_input,
+                        planned_max_tokens=0,
+                        utilization=plan.utilization,
+                        trimmed_messages=plan.trimmed_messages,
+                    )
+                except Exception:  # noqa: BLE001 — telemetry is best-effort
+                    pass
                 raise HTTPException(
                     status_code=400,
                     detail=(
@@ -1103,6 +1126,30 @@ def create_app(
             data["degraded_from"] = degraded_from
         if token_plan_out is not None:
             data["token_plan"] = token_plan_out
+
+        # Engine telemetry (slice 4): one plan-vs-actual row per
+        # request for the savings rollup + estimator calibration.
+        # Best-effort — telemetry must never break a chat response.
+        try:
+            from .telemetry import build_chat_record
+            from .tokenplan import CHARS_TOKEN_RATIO
+
+            full_history_tokens = None
+            if session_id:
+                chars = memory.session_content_chars(session_id)
+                if chars:
+                    full_history_tokens = int(chars * CHARS_TOKEN_RATIO)
+            db.record_telemetry(
+                **build_chat_record(
+                    route=actual_model,
+                    plan=token_plan_out,
+                    data=data,
+                    degraded_from=degraded_from,
+                    full_history_tokens=full_history_tokens,
+                )
+            )
+        except Exception:  # noqa: BLE001 — telemetry is best-effort
+            pass
 
         if retrieved:
             answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -1270,6 +1317,19 @@ def create_app(
             )
         return {"month": month, "routes": summaries}
 
+    @app.get("/v1/engine/rollup")
+    async def engine_rollup(days: int = 7):
+        """Token-Efficiency Engine rollup (slice 4): requests, savings
+        vs naive full-history prompting, KV-cache reuse, estimator
+        bias + calibration warning, per-route breakdown."""
+        from datetime import UTC, datetime, timedelta
+
+        from .telemetry import shape_rollup
+
+        days = max(1, min(days, 90))
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        return shape_rollup(db.telemetry_rollup(since), days)
+
     @app.get("/v1/routes")
     async def list_routes():
         """Routes with cost metadata, live spend, and recommended order.
@@ -1396,7 +1456,7 @@ def create_app(
             "openai_compatible": ["/v1/chat/completions", "/v1/models"],
             "retrieval": ["/v1/documents", "/v1/retrieve"],
             "routines": ["/v1/jobs", "/v1/suggestions", "/v1/actions"],
-            "economics": ["/v1/ledger", "/v1/routes"],
+            "economics": ["/v1/ledger", "/v1/routes", "/v1/engine/rollup"],
             "platform": [
                 "/v1/skills",
                 "/v1/persona",

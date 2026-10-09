@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.38.0 — 2026-10-09
+- Token-Efficiency Engine, slice 4 — telemetry + savings rollup:
+  every chat request records one plan-vs-actual row (`engine_telemetry`,
+  schema v6): route, estimate source + estimated input, actual
+  prompt/completion tokens, planned cap, window utilization, trimmed
+  count, llama.cpp cache timings (cache_n/prompt_n) when the backend
+  provides them, the full-history baseline for the session, finish
+  reason, degradation marker. Oversize refusals are recorded too.
+  `GET /v1/engine/rollup?days=7` reports requests, refusals,
+  degradations, **tokens saved vs naive full-history prompting**,
+  KV-cache reuse %, estimator bias (warning beyond ±10% over ≥20
+  estimator samples), over-utilization requests, and a per-route
+  breakdown; `/health` carries the trailing-24h engine summary.
+  Telemetry writes are best-effort and can never break a chat.
+
 ## 0.37.0 — 2026-10-09
 - Token-Efficiency Engine, slice 3 — router resilience (`app/router.py`):
   health gate (after 2 consecutive failures a route refuses fast for a

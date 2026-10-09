@@ -90,7 +90,12 @@ from .schemas import (
     SkillInfo,
     Suggestion,
 )
-from .skills import match_skill, resolve_skills_dir, scan_skills
+from .skills import (
+    get_skill_by_name,
+    match_skill,
+    resolve_skills_dir,
+    scan_skills,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -806,7 +811,15 @@ def create_app(
         # instructions are prepended as a system message so Milo responds
         # with that repo's methodology. Independent of the opt-in RAG.
         active_skill: str | None = None
-        skill = match_skill(req.messages[-1].content, app.state.skills_dir)
+        skill = None
+        if req.skill:
+            # v0.41.0: a deliberately chosen skill (tap-to-run from
+            # the catalog) wins over trigger matching. An unknown
+            # name degrades quietly to a normal turn — a stale
+            # client catalog must never break chat.
+            skill = get_skill_by_name(req.skill, app.state.skills_dir)
+        if skill is None:
+            skill = match_skill(req.messages[-1].content, app.state.skills_dir)
 
         # ── v0.10.0: session memory ──────────────────────────────
         # ── v0.11.0: scoped to user ──────────────────────────────
@@ -1439,11 +1452,18 @@ def create_app(
     # ── Phase 5: OS platform layer ───────────────────────────
 
     @app.get("/v1/skills")
-    async def list_skills():
+    async def list_skills(request: Request):
+        # v0.41.0: this registry listing was unauthenticated; it now
+        # follows the same rule as the skills bundle endpoint.
+        if not _resolve_user(request):
+            raise HTTPException(status_code=401, detail="Authentication required")
         return {"skills": [SkillInfo(**s).model_dump() for s in db.list_skill_files()]}
 
     @app.post("/v1/skills/rescan")
-    async def rescan_skills():
+    async def rescan_skills(request: Request):
+        # v0.41.0: rescan changes indexed state — same auth rule.
+        if not _resolve_user(request):
+            raise HTTPException(status_code=401, detail="Authentication required")
         return await scan_skills(db, docs, skills_dir)
 
     @app.get("/v1/persona")

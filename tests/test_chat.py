@@ -51,3 +51,47 @@ def test_chat_response_always_carries_sources(client):
     assert isinstance(body["sources"], list)
     for s in body["sources"]:
         assert "type" in s and "title" in s
+
+
+def test_chat_forced_skill_activates(client):
+    """v0.41.0: naming a skill in the request runs it on purpose —
+    no trigger phrase needed in the message."""
+    r = _chat(client, skill="stock-analysis")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("active_skill") == "stock-analysis"
+    assert {"type": "skill", "title": "stock-analysis"} in body["sources"]
+
+
+def test_chat_forced_skill_beats_trigger_match(client):
+    """A deliberate choice wins over whatever the message happens
+    to trigger."""
+    payload = {
+        "model": "stub",
+        "messages": [{"role": "user", "content": "help me with my household budget"}],
+        "skill": "stock-analysis",
+    }
+    r = client.post("/v1/chat/completions", json=payload)
+    assert r.status_code == 200
+    assert r.json().get("active_skill") == "stock-analysis"
+
+
+def test_chat_unknown_forced_skill_degrades_quietly(client):
+    """A stale client catalog must never break chat."""
+    r = _chat(client, skill="no-such-skill")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("active_skill") is None
+    assert all(s["type"] != "skill" for s in body["sources"])
+
+
+def test_skills_registry_requires_auth(client):
+    """v0.41.0: GET /v1/skills is no longer unauthenticated."""
+    r = client.get("/v1/skills")
+    assert r.status_code == 401
+    r = client.get(
+        "/v1/skills",
+        headers={"cf-access-authenticated-user-email": "test@example.com"},
+    )
+    assert r.status_code == 200
+    assert "skills" in r.json()

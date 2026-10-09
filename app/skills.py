@@ -210,6 +210,45 @@ def get_skill_bundle() -> dict:
     return {"hash": digest, "count": len(skills), "skills": skills}
 
 
+def get_skill_by_name(name: str, skills_dir: str | Path) -> dict[str, str] | None:
+    """v0.41.0: deliberate invocation — fetch one skill by name.
+
+    Mirrors match_skill's cache-then-disk strategy but matches the
+    skill NAME (case-insensitive), including skills that declare no
+    triggers — the majority, and unreachable by trigger matching.
+    Returns {"name", "description", "content"} or None.
+    """
+    wanted = name.strip().lower()
+    if not wanted:
+        return None
+    if _skill_cache and _skill_cache_dir == str(skills_dir):
+        for skill in _skill_cache:
+            if skill["name"].lower() == wanted:
+                return {
+                    "name": skill["name"],
+                    "description": skill["description"],
+                    "content": skill["content"],
+                }
+        return None
+    root = Path(skills_dir)
+    if not root.is_dir():
+        return None
+    for skill_md in sorted(root.glob("*/SKILL.md")):
+        try:
+            raw = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta, body = parse_frontmatter(raw)
+        skill_name = meta.get("name", skill_md.parent.name)
+        if skill_name.lower() == wanted:
+            return {
+                "name": skill_name,
+                "description": meta.get("description", ""),
+                "content": body,
+            }
+    return None
+
+
 def match_skill(message: str, skills_dir: str | Path) -> dict[str, str] | None:
     """Match a chat message against skill triggers (case-insensitive).
 

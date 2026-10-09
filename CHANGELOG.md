@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.39.0 — 2026-10-09
+- Device lifecycle completed on /devices: until now the page offered
+  only Revoke, revoked rows stayed forever, and a fresh token meant
+  registering a whole new device (the "redo pile-up"). New:
+  `DeviceStore.rotate()` — same device row, new token hash, the old
+  token stops working immediately — exposed as
+  `POST /v1/devices/{id}/rotate`; and `DeviceStore.delete()` —
+  permanent removal of a device row (active or revoked) — exposed as
+  `POST /v1/devices/{id}/remove`. The existing revoke
+  (`DELETE /v1/devices/{id}`) is unchanged.
+- The /devices page is rewritten to the simplicity standard: plain
+  words ("Your devices", "New token", "Disconnect", "Remove"),
+  consequences written on the button itself with two-tap inline
+  confirms (no browser pop-ups), human connection status
+  ("connected · used today"), an inline name field instead of a
+  prompt dialog, and a friendly empty state.
+
 ## 0.38.1 — 2026-10-09
 - Telemetry fix: the slice-4 savings metric compared unlike quantities
   (transcript-only baseline vs whole actual prompt incl. fixed

@@ -575,6 +575,27 @@ def create_app(
             raise HTTPException(status_code=404, detail="Device not found")
         return {"revoked": device_id}
 
+    @app.post("/v1/devices/{device_id}/rotate")
+    async def rotate_device(device_id: str, request: Request):
+        """v0.39.0: fresh token for the same device; the old one dies."""
+        email = _user_email(request)
+        token = app.state.devices.rotate(email, device_id)
+        if token is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Device not found or already revoked",
+            )
+        return {"device_id": device_id, "token": token}
+
+    @app.post("/v1/devices/{device_id}/remove")
+    async def remove_device(device_id: str, request: Request):
+        """v0.39.0: permanently delete a device row (active or revoked)."""
+        email = _user_email(request)
+        ok = app.state.devices.delete(email, device_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Device not found")
+        return {"removed": device_id}
+
     # ── v0.31.0: client config for native apps ──────────────────
     @app.get("/v1/client/config")
     async def client_config(request: Request):

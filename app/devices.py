@@ -11,7 +11,10 @@ Flow:
 2. The native app stores the token (Android Keystore) and sends it as
    `Authorization: Bearer <token>` on API calls.
 3. Server resolves the token → user email; all data stays user-scoped.
-4. Tokens are revocable via DELETE /v1/devices/{id}.
+4. Tokens are revocable via DELETE /v1/devices/{id}, rotatable in
+   place via POST /v1/devices/{id}/rotate (same device, new token,
+   old token dies), and permanently removable via
+   POST /v1/devices/{id}/remove (v0.39.0).
 """
 
 from __future__ import annotations
@@ -123,6 +126,38 @@ class DeviceStore:
         with sqlite3.connect(self.path) as c:
             cur = c.execute(
                 "UPDATE devices SET revoked=1 WHERE id=? AND user_email=?",
+                (device_id, user_email),
+            )
+            return cur.rowcount > 0
+
+    def rotate(self, user_email: str, device_id: str) -> str | None:
+        """Issue a fresh token for an existing active device (v0.39.0).
+
+        Same device row, new token hash — the old token stops working
+        immediately, so refreshing a token no longer means registering
+        a new device. Returns the one-time plaintext token, or None if
+        the device is missing or already revoked.
+        """
+        token = f"milo_{secrets.token_urlsafe(32)}"
+        with sqlite3.connect(self.path) as c:
+            cur = c.execute(
+                "UPDATE devices SET token_hash=?"
+                " WHERE id=? AND user_email=? AND revoked=0",
+                (_hash_token(token), device_id, user_email),
+            )
+            if cur.rowcount == 0:
+                return None
+        return token
+
+    def delete(self, user_email: str, device_id: str) -> bool:
+        """Permanently remove a device row, active or revoked (v0.39.0).
+
+        Removing an active device also kills its token — the row and
+        its hash are gone. Returns True if a row was removed.
+        """
+        with sqlite3.connect(self.path) as c:
+            cur = c.execute(
+                "DELETE FROM devices WHERE id=? AND user_email=?",
                 (device_id, user_email),
             )
             return cur.rowcount > 0

@@ -84,6 +84,17 @@ class ModelRouter:
         # Rewrite the model ID for backends that need it (e.g. OpenRouter).
         if route.model_id:
             payload = {**payload, "model": route.model_id}
+        # Token-planning backstop (Engine slice 1): every request leaves
+        # with an explicit max_tokens. The chat endpoint plans against
+        # the route window; this covers all other callers (scheduler,
+        # summarizer) with the route default, clamped to the route cap.
+        if route.default_max_tokens and not payload.get("max_tokens"):
+            payload = {**payload, "max_tokens": route.default_max_tokens}
+        if (
+            route.max_output_tokens
+            and (payload.get("max_tokens") or 0) > route.max_output_tokens
+        ):
+            payload = {**payload, "max_tokens": route.max_output_tokens}
         started = time.monotonic()
         try:
             async with self._client(route.timeout_s) as client:

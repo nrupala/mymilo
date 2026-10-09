@@ -998,8 +998,57 @@ def create_app(
                 actual_model = route_for_complexity(
                     user_text, settings, default=settings.default_model
                 )
+        # ── token planning (Token-Efficiency Engine, slice 1) ────
+        # Plan the output budget against the route's real window.
+        # Over-length conversations are trimmed (oldest non-system
+        # turns first) before the backend ever sees them; if even the
+        # system context plus the current turn cannot fit, refuse with
+        # a plain explanation instead of a silent truncation.
+        token_plan_out: dict | None = None
+        route = settings.route_for(actual_model)
+        if route is not None and route.context_window:
+            from .tokenplan import (
+                estimate_input_tokens,
+                plan_max_tokens,
+                trim_messages_to_fit,
+            )
+
+            est, est_source = await estimate_input_tokens(route, payload["messages"])
+            plan = plan_max_tokens(
+                route, est, desired=req.max_tokens, estimate_source=est_source
+            )
+            if not plan.fits:
+                keep_budget = route.context_window - plan.margin - plan.desired_output
+                trimmed, dropped = trim_messages_to_fit(
+                    payload["messages"], max(keep_budget, 0)
+                )
+                if dropped:
+                    payload["messages"] = trimmed
+                    est, est_source = await estimate_input_tokens(route, trimmed)
+                    plan = plan_max_tokens(
+                        route,
+                        est,
+                        desired=req.max_tokens,
+                        estimate_source=est_source,
+                    )
+                    plan.trimmed_messages = dropped
+            if not plan.fits:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "This conversation has grown too large for the "
+                        "model's context window, even after trimming older "
+                        "turns. Start a new chat, or ask me to summarize "
+                        "where we are first."
+                    ),
+                )
+            payload["max_tokens"] = plan.planned_max_tokens
+            token_plan_out = plan.as_dict()
+
         data = await router.chat_completion(actual_model, payload)
         data["routed_model"] = actual_model
+        if token_plan_out is not None:
+            data["token_plan"] = token_plan_out
 
         if retrieved:
             answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")

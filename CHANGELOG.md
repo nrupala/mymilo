@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.35.0 — 2026-10-09
+- Token-Efficiency Engine, slice 1 (`app/tokenplan.py`): per-route token
+  planning registry in config (`context_window`, `default_max_tokens`,
+  `max_output_tokens` — the window must match the backend's real serving
+  config, e.g. llama.cpp `--ctx-size`). Every chat request now leaves
+  with an explicit `max_tokens` planned as
+  `min(desired, cap, window − estimated_input − margin)`; estimation uses
+  the backend's own tokenizer (llama.cpp `/tokenize`) for local routes
+  with a calibrated character-estimator fallback. The n_ctx guard trims
+  the oldest non-system turns of over-length conversations before
+  sending and refuses with a plain explanation when nothing can be
+  trimmed — llama.cpp never silently truncates again. Responses carry a
+  `token_plan` block (estimate, source, margin, utilization). The router
+  applies route defaults/caps as a backstop for non-chat callers
+  (scheduler, summarizer).
+
+## 0.24.0–0.34.0 — 2026-10-07/08
+- Agentic Milo, per-turn escalation, episodic + semantic memory, unified
+  context, summarization, OpenCode bridge, Codetopo + repo-distilled
+  skills, device-token auth, API host guard, skills bundle endpoint,
+  Android-native prep. (Entries summarized; see git history and the
+  per-release verification records in docs/.)
+
 ## 0.23.1 — 2026-10-07
 - Startup hang fixed: the skill scan (`scan_skills`) blocked startup and
   hung with 73 skills; it now runs in the background via

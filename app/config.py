@@ -31,6 +31,14 @@ class ModelRoute:
     input_usd_per_1k: float = 0.0
     output_usd_per_1k: float = 0.0
     free_quota_usd: float | None = None
+    # Token planning registry (Token-Efficiency Engine, slice 1). All
+    # optional: a route without a context window is unplanned and the
+    # token planner leaves its requests untouched. Windows must match
+    # the backend's actual serving config (e.g. llama.cpp --ctx-size),
+    # not the model's nominal maximum.
+    context_window: int | None = None
+    default_max_tokens: int | None = None
+    max_output_tokens: int | None = None
 
 
 @dataclass
@@ -154,6 +162,21 @@ class Settings:
                     free_quota_usd=(
                         float(m["free_quota_usd"])
                         if m.get("free_quota_usd") is not None
+                        else None
+                    ),
+                    context_window=(
+                        int(m["context_window"])
+                        if m.get("context_window") is not None
+                        else None
+                    ),
+                    default_max_tokens=(
+                        int(m["default_max_tokens"])
+                        if m.get("default_max_tokens") is not None
+                        else None
+                    ),
+                    max_output_tokens=(
+                        int(m["max_output_tokens"])
+                        if m.get("max_output_tokens") is not None
                         else None
                     ),
                 )

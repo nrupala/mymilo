@@ -17,6 +17,14 @@ path = "data/mymilo.db"
 name = "local"
 base_url = "http://127.0.0.1:8080/v1"
 timeout_s = 60.0
+# Token planning registry (optional per route). context_window MUST match
+# the backend's actual serving config (llama.cpp --ctx-size), not the
+# model's nominal maximum. When set, every request is planned:
+# max_tokens = min(desired, max_output_tokens, window - input - margin),
+# and over-length conversations are trimmed before they are sent.
+# context_window = 8192
+# default_max_tokens = 1024
+# max_output_tokens = 4096
 
 # Example: point at the future OS endpoint instead of llama.cpp directly.
 # [[models]]

@@ -57,6 +57,7 @@ from .orchestrate import route_for_complexity, wants_background
 from .planner import Planner, create_suggestion
 from .rag import build_rag_messages, rag_sources, verify_citations
 from .router import (
+    BackendBusyError,
     ModelNotFoundError,
     ModelRouter,
     UpstreamError,
@@ -347,6 +348,22 @@ def create_app(
                     "detail": (
                         f"backend for model '{exc.model}' unreachable at {exc.base_url}"
                     ),
+                }
+            },
+        )
+
+    @app.exception_handler(BackendBusyError)
+    async def _backend_busy(_: Request, exc: BackendBusyError):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "message": (
+                        "Milo's model is busy with other requests right now. "
+                        "Please try again in a moment."
+                    ),
+                    "type": "backend_busy",
+                    "detail": f"all slots for model '{exc.model}' are in use",
                 }
             },
         )
@@ -1053,8 +1070,37 @@ def create_app(
             payload["max_tokens"] = plan.planned_max_tokens
             token_plan_out = plan.as_dict()
 
-        data = await router.chat_completion(actual_model, payload)
+        degraded_from: str | None = None
+        try:
+            data = await router.chat_completion(actual_model, payload)
+        except (UpstreamUnavailableError, BackendBusyError):
+            # Ordered degradation (Engine slice 3): only "auto"
+            # requests may change route — an explicit model choice is
+            # honored with the honest error, never a silent swap. A
+            # local route that is down/gated/busy degrades to the
+            # first keyed cloud route; the local-planned max_tokens is
+            # conservative on the cloud window, and the plan dict notes
+            # the degradation.
+            cloud = (
+                [
+                    m.name
+                    for m in settings.models
+                    if m.name in ("deepseek", "openrouter", "cloud")
+                    and settings.api_key_for(m)
+                ]
+                if req.model == "auto"
+                else []
+            )
+            if not cloud or cloud[0] == actual_model:
+                raise
+            degraded_from = actual_model
+            actual_model = cloud[0]
+            if token_plan_out is not None:
+                token_plan_out["degraded_to"] = actual_model
+            data = await router.chat_completion(actual_model, payload)
         data["routed_model"] = actual_model
+        if degraded_from is not None:
+            data["degraded_from"] = degraded_from
         if token_plan_out is not None:
             data["token_plan"] = token_plan_out
 

@@ -76,11 +76,13 @@ def summary_tier(summary_row: dict | None) -> str | None:
     return header + cap_to_tokens(text, max(body_budget, 0)) + "]"
 
 
-def _fact_lines(facts: list[dict], query: str) -> list[str]:
+def _fact_entries(facts: list[dict], query: str) -> list[tuple[str, dict]]:
     """Rank semantic facts by word overlap with the query (CSA-style).
 
     Only facts sharing a word with the query are relevant enough to
-    spend tokens on; at most FACTS_MAX_ITEMS survive.
+    spend tokens on; at most FACTS_MAX_ITEMS survive. Each entry is
+    (prompt line, source) — the source is what v0.40.0 reports to
+    clients as one of the answer's sources.
     """
     query_words = {w for w in query.lower().split() if len(w) > 2}
     scored: list[tuple[int, str]] = []
@@ -95,18 +97,22 @@ def _fact_lines(facts: list[dict], query: str) -> list[str]:
         line = f"- {category}/{key}: {value}" if category else f"- {key}: {value}"
         scored.append((overlap, line))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [line for _, line in scored[:FACTS_MAX_ITEMS]]
+    return [
+        (line, {"type": "memory", "title": line[2:][:80]})
+        for _, line in scored[:FACTS_MAX_ITEMS]
+    ]
 
 
-def _episode_lines(episodes: list[dict]) -> list[str]:
+def _episode_entries(episodes: list[dict]) -> list[tuple[str, dict]]:
     """Format retrieved episodes, using real preview content.
 
     The episodic store scores past sessions by keyword overlap and
     returns their first messages as a preview; the snippet is the
     first user turn (what that conversation was about), falling back
-    to the first message of any role.
+    to the first message of any role. Each entry is (prompt line,
+    source) for the v0.40.0 sources list.
     """
-    lines: list[str] = []
+    entries: list[tuple[str, dict]] = []
     for ep in episodes[:EPISODES_MAX_ITEMS]:
         title = ep.get("title", "Untitled")
         preview = ep.get("preview") or []
@@ -119,36 +125,41 @@ def _episode_lines(episodes: list[dict]) -> list[str]:
             snippet = preview[0].get("content", "")
         snippet = " ".join(snippet.split())  # collapse whitespace
         if snippet:
-            lines.append(f"[Past: {title}] {snippet}")
+            line = f"[Past: {title}] {snippet}"
         else:
-            lines.append(f"[Past: {title}]")
-    return lines
+            line = f"[Past: {title}]"
+        entries.append((line, {"type": "past chat", "title": title}))
+    return entries
 
 
 def retrieval_tier(
     episodes: list[dict], facts: list[dict], query: str = ""
-) -> str | None:
-    """Assemble the CSA tier block under its budgets, or None.
+) -> tuple[str | None, list[dict]]:
+    """Assemble the CSA tier block under its budgets.
 
     Each item is capped at RETRIEVAL_ITEM_CAP tokens; items are added
     (facts first — they are denser) until the tier budget is reached.
+    Returns (block_text, sources): the sources name the memory the
+    block actually used, for the v0.40.0 response `sources` list.
+    (None, []) when nothing was relevant.
     """
-    items = _fact_lines(facts, query) + _episode_lines(episodes)
+    items = _fact_entries(facts, query) + _episode_entries(episodes)
     if not items:
-        return None
+        return None, []
     header = "Relevant context from memory:"
-    chosen: list[str] = []
+    chosen: list[tuple[str, dict]] = []
     used = estimate_tokens(header)
-    for item in items:
-        capped = cap_to_tokens(item, RETRIEVAL_ITEM_CAP)
+    for line, source in items:
+        capped = cap_to_tokens(line, RETRIEVAL_ITEM_CAP)
         cost = estimate_tokens(capped)
         if used + cost > RETRIEVAL_TIER_BUDGET:
             break
-        chosen.append(capped)
+        chosen.append((capped, source))
         used += cost
     if not chosen:
-        return None
-    return header + "\n" + "\n".join(chosen)
+        return None, []
+    text = header + "\n" + "\n".join(line for line, _ in chosen)
+    return text, [source for _, source in chosen]
 
 
 def dynamic_insert_index(messages: list[dict]) -> int:

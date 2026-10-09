@@ -848,7 +848,12 @@ def create_app(
             profile_facts = [f for group in profile.values() for f in group]
         except Exception:
             profile_facts = []
-        retrieval_block = retrieval_tier(episodes, profile_facts, query=user_text)
+        retrieval_block, retrieval_sources = retrieval_tier(
+            episodes, profile_facts, query=user_text
+        )
+        # v0.40.0: unified sources for the response envelope — what
+        # this turn actually used, in the order it was gathered.
+        turn_sources: list[dict] = list(retrieval_sources)
 
         messages = [m.model_dump() for m in req.messages]
         # Insert history after any leading system messages.
@@ -978,6 +983,7 @@ def create_app(
                 dynamic_blocks.append({"role": "system", "content": "\n".join(lines)})
         if skill:
             active_skill = skill["name"]
+            turn_sources.append({"type": "skill", "title": active_skill})
             messages = [
                 {"role": "system", "content": skill["content"]},
                 *messages,
@@ -1003,6 +1009,15 @@ def create_app(
                     ctx = format_search_context(results)
                     if ctx:
                         dynamic_blocks.append({"role": "system", "content": ctx})
+                        for r in results:
+                            if r.get("title"):
+                                turn_sources.append(
+                                    {
+                                        "type": "web",
+                                        "title": r["title"],
+                                        "url": r.get("url", ""),
+                                    }
+                                )
                 except Exception:  # noqa: BLE001 — search is best-effort
                     pass
             # Live market data for "brief me on the market today".
@@ -1017,6 +1032,9 @@ def create_app(
                 brief = format_brief(indices)
                 if brief:
                     dynamic_blocks.append({"role": "system", "content": brief})
+                    turn_sources.append(
+                        {"type": "market", "title": "Live market brief"}
+                    )
 
         # Splice the dynamic blocks in after the stable system prefix
         # (Engine slice 2): everything before this point is cacheable
@@ -1196,6 +1214,24 @@ def create_app(
             data["citation_check"] = citation_check
         if active_skill:
             data["active_skill"] = active_skill
+        # v0.40.0: the unified sources list is always present so
+        # clients can rely on it (empty when the turn used nothing).
+        for s in rag_sources_out:
+            turn_sources.append(
+                {
+                    "type": "document",
+                    "title": s["filename"],
+                    "detail": f"part {s['chunk_index'] + 1}",
+                }
+            )
+        _seen: set[tuple[str, str]] = set()
+        _deduped: list[dict] = []
+        for s in turn_sources:
+            _key = (s["type"], s["title"])
+            if _key not in _seen:
+                _seen.add(_key)
+                _deduped.append(s)
+        data["sources"] = _deduped
         # ── v0.10.0: save assistant reply to session memory ──
         if session_id:
             try:

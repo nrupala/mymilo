@@ -39,3 +39,15 @@ def test_chat_backend_down_503(client_no_transport):
 def test_chat_validation_422(client):
     r = client.post("/v1/chat/completions", json={"model": "stub"})
     assert r.status_code == 422
+
+
+def test_chat_response_always_carries_sources(client):
+    """v0.40.0: the unified sources list is part of the envelope —
+    clients (app sources row, web UI) rely on its presence."""
+    r = _chat(client)
+    assert r.status_code == 200
+    body = r.json()
+    assert "sources" in body
+    assert isinstance(body["sources"], list)
+    for s in body["sources"]:
+        assert "type" in s and "title" in s

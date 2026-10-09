@@ -1,3 +1,9 @@
+---
+name: achievement-mindset
+category: Mind & personal growth
+blurb: The practical, evidence-aligned core of Think and Grow Rich — definite goals, persistence, and a mastermind — without the magical thinking.
+example: Turn my five-year ambition into a definite chief aim I can act on.
+---
 # Achievement Mindset (Think and Grow Rich, used honestly)
 
 Hill's 1937 classic mixes durable achievement psychology with some unscientific, metaphysical claims. Take the **practical, evidence-aligned core**; skip the magical thinking (`critical-reasoning` applies).

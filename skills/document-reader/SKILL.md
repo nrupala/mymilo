@@ -3,6 +3,9 @@ name: document-reader
 description: Document in, place kept, resume anywhere (dogear).
 version: 1
 triggers: read document, keep my place, resume reading, where was I, bookmark
+category: Writing & documents
+blurb: Keeps your place in long documents and resumes exactly where you stopped — across sessions, like a reading companion with a memory.
+example: I was halfway through that report — where was I, and what is next?
 ---
 # Document Reader
 

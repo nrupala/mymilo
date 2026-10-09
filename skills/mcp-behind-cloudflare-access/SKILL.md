@@ -1,6 +1,9 @@
 ---
 name: mcp-behind-cloudflare-access
 description: Playbook for exposing a self-hosted/headless MCP server to Town (or any non-browser MCP client) through Cloudflare Access + Cloudflare Tunnel, and for debugging why such a bridge won't connect. Use this WHENEVER wiring Town/Milo to an MCP bridge behind Cloudflare Access (the Aetheris oc-bridge Town→OpenCode, the planned local-OpenCode target, mcp.aimlds.org, or any future one), or WHENEVER an MCP server authenticates (oauthStatus valid) but shows 0 tools, returns 421 Misdirected Request, or hangs/times out on write calls while reads work. Covers the three sequential gates (Cloudflare Access binding-cookie edge, MCP DNS-rebinding transport security, and the write-tool async/elicitation handler) plus the layer-localization diagnostic method.
+category: How Milo works
+blurb: The playbook for connecting Milo to tools behind Cloudflare Access — and for debugging the three gates where such bridges usually fail.
+example: My MCP bridge shows zero tools — walk the three gates.
 ---
 
 # MCP server behind Cloudflare Access — connection playbook

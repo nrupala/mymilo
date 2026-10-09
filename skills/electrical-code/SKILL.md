@@ -3,6 +3,9 @@ name: electrical-code
 description: Canadian Electrical Code Section 18 Q&A with proof traces (SAIC).
 version: 1
 triggers: electrical code, CEC, section 18, hazardous location, classified area, wiring method, ampacity, grounding, bonding
+category: Electrical & energy
+blurb: Answers Canadian Electrical Code Section 18 questions — hazardous locations, classifications — with the reasoning and proof trace shown, SAIC-style.
+example: What does CEC Section 18 say about Class I locations?
 ---
 # Electrical Code Q&A
 

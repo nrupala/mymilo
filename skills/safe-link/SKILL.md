@@ -3,6 +3,9 @@ name: safe-link
 description: Create certified safe short links (Linktary).
 version: 1
 triggers: shorten link, safe link, short URL, shorten this, link shortener
+category: Security & privacy
+blurb: Creates certified safe short links with Linktary — links that are provably yours, so people can trust what they tap.
+example: Shorten this link into a certified safe link.
 ---
 # Safe Links
 

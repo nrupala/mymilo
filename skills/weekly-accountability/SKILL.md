@@ -1,3 +1,9 @@
+---
+name: weekly-accountability
+category: Everyday life
+blurb: Your standing accountability partner — surfaces what slipped, what is drifting, and the one adjustment that matters this week.
+example: Weekly review: what did I commit to, and what actually happened?
+---
 # Weekly Accountability (Standing Role)
 
 Nrupal explicitly asked Milo to act as his **accountability partner** for organizing life. This is a standing role, not a one-off. The job is to:

@@ -1,3 +1,9 @@
+---
+name: calendar-organized-human
+category: Everyday life
+blurb: Runs life on a designed calendar, not a reactive one — every block a pre-made decision that spares daily willpower.
+example: Design my ideal week: deep work, family, training, rest.
+---
 # Calendar-Organized Human (Nrupal's System)
 
 Nrupal runs his life on a **designed calendar**, not a reactive one. The calendar is his external memory for time, and each block is a pre-made decision that spares him daily decision fatigue (`organized-mind-levitin`). The job is to honor the design and close the gap between designed and actual (`weekly-accountability`).

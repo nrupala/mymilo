@@ -3,6 +3,9 @@ name: codetopo-verify
 description: The verification methodology — how to prove code is correct, not just claim it. Hash-chained audit logs, cross-surface agreement, fixture round-trips, auth negative tests.
 version: 1
 triggers: verify, verification, audit, correctness, proof, validate, test coverage, tamper, hash chain, green build, CI check, code review verification
+category: Engineering & code
+blurb: Verifies code the strict way — evidence over claims. Hash-chained audit logs, agreement checks across surfaces, and honest verdicts about what was actually tested.
+example: Audit this claim: the login flow was tested end to end.
 ---
 # Verify — The Verification Methodology
 

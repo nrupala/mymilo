@@ -1,3 +1,9 @@
+---
+name: cloudflare-pages-deploy
+category: Engineering & code
+blurb: Deploys a static site or web app to Cloudflare Pages with a custom domain, the minimum-steps, verify-everything way.
+example: Deploy this site to Cloudflare Pages on my domain.
+---
 # cloudflare-pages-deploy
 
 Deploy a static site or a vanilla-JS/TS PWA to Cloudflare Pages with a custom domain, using Nrupal's connected Cloudflare tooling — the minimum-calls, verify-everything way. Use this WHENEVER shipping a site/app to Cloudflare Pages (git-integrated), attaching a `*.devinfo.dev` (or other owned-zone) custom domain, or debugging a Pages deploy/domain that is stuck.

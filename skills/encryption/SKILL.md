@@ -3,6 +3,9 @@ name: encryption
 description: Practical encryption guidance — what to encrypt, key management basics, authenticated encryption, KDF choice, and how to spot weak crypto claims. Grounded in zerok-container and mykey.
 version: 1
 triggers: encryption, encrypt, AES, cryptography, crypto, key management, KDF, Argon2, TLS, at rest, in transit, cipher, decryption
+category: Security & privacy
+blurb: Practical encryption guidance — what to encrypt, how keys should be managed, and how to spot weak crypto claims. Boring, standard, auditable.
+example: How should a small app encrypt files so only the owner can open them?
 ---
 # Practical Encryption
 

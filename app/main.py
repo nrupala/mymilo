@@ -615,6 +615,11 @@ def create_app(
             "complexity_threshold_chars": 500,
             "skills_bundle_version": __version__,
             "skills_bundle_hash": get_skill_bundle()["hash"],
+            # v0.42.0: where the app's Support button points. Set
+            # MYMILO_SUPPORT_URL in the server environment; empty
+            # hides the button everywhere. No app release needed
+            # to change it.
+            "support_url": os.environ.get("MYMILO_SUPPORT_URL", ""),
             "features": {
                 "streaming": False,
                 "offline_queue": True,
@@ -1612,6 +1617,16 @@ agentic OS. Version {__version__}.
         """v0.32.0: device management — register/revoke native app tokens."""
         return templates.TemplateResponse(
             request, "devices.html", {"version": __version__}
+        )
+
+    @app.get("/guide", response_class=HTMLResponse)
+    async def guide_page(request: Request):
+        """v0.42.0: the user guide — quick start, the skills
+        catalogue, use cases, FAQ, and About. The same content the
+        app shows in its Help & guide section, readable in any
+        browser."""
+        return templates.TemplateResponse(
+            request, "guide.html", {"version": __version__}
         )
 
     @app.get("/jobs", response_class=HTMLResponse)

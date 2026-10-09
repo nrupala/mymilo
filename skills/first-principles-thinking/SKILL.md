@@ -1,3 +1,9 @@
+---
+name: first-principles-thinking
+category: Thinking & decisions
+blurb: Reasons up from what is irreducibly true instead of copying what others do — the way hard problems get original answers.
+example: Break down home energy storage from first principles.
+---
 # First-Principles Thinking
 
 Reason **up from fundamental truths**, not sideways from analogy. Reasoning by analogy copies what others do with slight tweaks; first-principles reasoning asks what is actually, irreducibly true and rebuilds from there. Most "impossible" or "that's just how it's done" walls are conventions, not laws.

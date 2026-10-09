@@ -1,3 +1,9 @@
+---
+name: aetheris-mgmt-api
+category: How Milo works
+blurb: The operations reference for the Aetheris server — how Milo inspects, restarts, and diagnoses its own home without SSH.
+example: Check the health of the services on Aetheris.
+---
 # Aetheris Management API
 
 Operational reference for the lightweight management API on oracle-aetheris. Use this skill whenever Milo needs to inspect, restart, or diagnose services on the Aetheris box without SSH.

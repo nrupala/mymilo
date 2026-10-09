@@ -3,6 +3,9 @@ name: certification
 description: The certification methodology — how to go from a plain-language spec to code you can prove correct. Proof certificates, the trust primitive, what "certified" means and what it doesn't.
 version: 1
 triggers: certify, certification, proof certificate, formally verified, Lean, proof assistant, correctness proof, verified code, audit trail, tamper-evident, specification to code, algorithm correctness
+category: Engineering & code
+blurb: Explains and applies the certification method — how software goes from a plain-language promise to a proof certificate anyone can re-check.
+example: How would you certify that a sorting routine is correct?
 ---
 # Certification — From Plain Language to Provable Code
 

@@ -3,6 +3,9 @@ name: stock-analysis
 description: Institutional-grade equity research using the 7-step methodology (research-analyst).
 version: 1
 triggers: stock, ticker, shares, equity, valuation, P/E, price target, earnings, dividend, portfolio stock, forecast, AAPL, TSLA, NVDA, MSFT, GOOGL, META, AMZN, AAPL, google, meta, amazon, apple, microsoft, tesla, nvidia
+category: Money & markets
+blurb: Researches a stock the way an institutional analyst would — business, financials, valuation, and risks in a fixed seven-step method. Education only, never a buy or sell call.
+example: Analyze AAPL stock for me, step by step.
 ---
 # Stock Analysis
 

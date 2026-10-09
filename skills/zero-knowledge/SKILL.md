@@ -3,6 +3,9 @@ name: zero-knowledge
 description: Zero-knowledge principles for software — the server learns nothing. Client-side encryption, proof without revelation, when ZK matters vs when it's theater. Distilled from zerok-container.
 version: 1
 triggers: zero knowledge, zero-knowledge, ZK, client-side encryption, server learns nothing, private cloud, end-to-end encrypted, privacy architecture
+category: Security & privacy
+blurb: Zero-knowledge principles — designing so the server learns nothing and you never have to trust software with your data.
+example: Explain zero-knowledge like I am smart but new: where does it actually matter?
 ---
 # Zero-Knowledge Principles
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.42.0 — 2026-10-09
+- The skills catalogue has content now: every one of the 81
+  skills carries a `category`, a plain-language `blurb` (what it
+  can do, in a sentence or two), and an `example` worth trying —
+  authored into each SKILL.md's frontmatter (57 skills previously
+  had no description at all) and carried by the skills bundle,
+  so the app and the web guide explain skills instead of merely
+  counting them.
+- New `/guide` page: Quick start, the live skills catalogue
+  (searchable, grouped by category), use cases, an FAQ, and an
+  About section — builder credit ("Owned by Nrupal Akolkar ·
+  Built with Muse by Meta") and links to both public repos.
+  The same content the app's Help & guide section shows.
+- Client config gains `support_url` (from the server's
+  `MYMILO_SUPPORT_URL` environment): the Support button in the
+  app and on the guide page appears only when it is set, and it
+  can change without an app release.
+
 ## 0.41.0 — 2026-10-09
 - Skills can be run on purpose: the chat request accepts an
   optional `skill` name which force-activates that skill for the

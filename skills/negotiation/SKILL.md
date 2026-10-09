@@ -1,3 +1,9 @@
+---
+name: negotiation
+category: Mind & personal growth
+blurb: Prepares the fundamentals and coaches the improvisation — real negotiation is nonlinear, and this skill handles both layers.
+example: Prep me for a salary negotiation: my case, their likely moves, my walk-away.
+---
 # Negotiation
 
 Two layers: the **fundamentals** you prepare, and the **improvisation** you do live. Michael Wheeler's insight (*The Art of Negotiation*) is that real negotiations are chaotic and nonlinear — you need a sense of direction AND the agility to adapt, like a jazz musician, not a rigid script.

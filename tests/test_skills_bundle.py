@@ -11,7 +11,9 @@ def bundle(tmp_path):
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(
         "---\nname: demo-skill\ndescription: Demo skill\n"
-        "triggers: demo, test skill\n---\n# Demo\nDo demo things.\n"
+        "triggers: demo, test skill\n"
+        "category: Testing\nblurb: Does demo things, plainly.\n"
+        "example: Demo the thing.\n---\n# Demo\nDo demo things.\n"
     )
     plain_dir = tmp_path / "plain-skill"
     plain_dir.mkdir()
@@ -43,3 +45,19 @@ def test_bundle_includes_triggerless_skills(bundle):
 def test_bundle_hash_stable(bundle):
     again = get_skill_bundle()
     assert again["hash"] == bundle["hash"]
+
+
+def test_bundle_carries_catalogue_fields(bundle):
+    """v0.42.0: category/blurb/example ride the bundle so the app
+    and the /guide page can explain every skill in plain words."""
+    by_name = {s["name"]: s for s in bundle["skills"]}
+    demo = by_name["demo-skill"]
+    assert demo["category"] == "Testing"
+    assert demo["blurb"] == "Does demo things, plainly."
+    assert demo["example"] == "Demo the thing."
+    # A skill without catalogue frontmatter gets honest defaults:
+    # the description stands in for the blurb, never a blank.
+    plain = by_name["plain-skill"]
+    assert plain["category"] == "More skills"
+    assert plain["blurb"] == "No triggers here"
+    assert plain["example"] == ""

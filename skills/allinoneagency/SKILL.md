@@ -3,6 +3,9 @@ name: allinoneagency
 description: Multi-agent orchestration patterns from a local-first agency — when to split work across agents vs do it directly, the foreman/worker pattern, capability-scoped tasks, coordination without chaos.
 version: 1
 triggers: multi-agent, orchestrate, delegate, subagent, foreman, worker agent, agent coordination, parallel agents, local-first agents, agent registry, task split, fan out
+category: How Milo works
+blurb: How Milo splits big work across specialized agents — one coordinator, scoped tasks, an audit trail — the agency pattern behind the scenes.
+example: How would you split a website rebuild across agents?
 ---
 # AllInOneAgency — Multi-Agent Orchestration, Local-First
 

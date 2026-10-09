@@ -1,3 +1,9 @@
+---
+name: efficient-web-builder
+category: Engineering & code
+blurb: Builds websites as if bandwidth and compute are paid for — because they are. Fast, light pages that still look like a million dollars.
+example: Make this landing page load fast on a cheap plan without losing polish.
+---
 # Efficient Web Builder — Nrupal's Standard
 
 Build and render every site as if compute, bandwidth, energy, and storage are finite and paid — because for Nrupal they are (~$3/mo cloud, free-tier edges). Efficiency is a hard constraint, not a polish step. The same discipline applies on Cloudflare's edge and on Nrupal's own OCI box. Performance and energy move together: a faster site is almost always a cheaper, greener site.

@@ -3,6 +3,9 @@ name: fault-simulation
 description: Relay fault simulation for training (relay_sim engine).
 version: 1
 triggers: fault simulation, relay, short circuit, protection relay, simulate fault, overcurrent
+category: Electrical & energy
+blurb: Teaches protection relays and faults through simulation — short circuits, relay behavior, and what the protection should do, step by step.
+example: Simulate a line-to-ground fault and walk me through the relay response.
 ---
 # Fault Simulation
 

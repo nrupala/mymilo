@@ -1,3 +1,9 @@
+---
+name: gita-equanimity
+category: Mind & personal growth
+blurb: A steady-mind lens from the Gita — full commitment to the action, release of attachment to the result. Offered as philosophy, not religion.
+example: I did the work and the result went to someone else. Help me steady.
+---
 # Gita Equanimity
 
 A wisdom lens Nrupal values: act with full commitment and a steady mind, while releasing attachment to results. Offered as philosophy, not religious instruction.

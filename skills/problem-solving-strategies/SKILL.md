@@ -1,3 +1,9 @@
+---
+name: problem-solving-strategies
+category: Thinking & decisions
+blurb: When effort alone is not working, reach for a strategy — Polya's method and Engel's heavy-hitting techniques for stuck problems.
+example: I am stuck on this design problem. Give me strategies, not answers.
+---
 # Problem-Solving Strategies
 
 When effort alone isn't working, reach for a strategy. Polya gives the umbrella; Engel gives the heavy-hitting techniques.

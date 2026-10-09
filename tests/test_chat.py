@@ -95,3 +95,27 @@ def test_skills_registry_requires_auth(client):
     )
     assert r.status_code == 200
     assert "skills" in r.json()
+
+
+def test_guide_page_serves(client):
+    """v0.42.0: the user guide (quick start, catalogue, FAQ,
+    About) is a page any browser can open."""
+    r = client.get("/guide")
+    assert r.status_code == 200
+    body = r.text
+    assert "Quick start" in body
+    assert "Skills catalogue" in body
+    assert "Nrupal Akolkar" in body  # About / builder credit
+    assert "github.com/nrupala/mymilo" in body
+
+
+def test_client_config_support_url(client, monkeypatch):
+    """v0.42.0: the Support button's destination is server-set,
+    so it can change without an app release; empty hides it."""
+    monkeypatch.delenv("MYMILO_SUPPORT_URL", raising=False)
+    r = client.get("/v1/client/config")
+    assert r.status_code == 200
+    assert r.json()["support_url"] == ""
+    monkeypatch.setenv("MYMILO_SUPPORT_URL", "https://example.org/support")
+    r = client.get("/v1/client/config")
+    assert r.json()["support_url"] == "https://example.org/support"

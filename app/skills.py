@@ -151,6 +151,9 @@ def refresh_skill_cache(skills_dir: str | Path) -> int:
                         "description": meta.get("description", ""),
                         "content": body,
                         "triggers": trigger_list,
+                        "category": meta.get("category", "More skills"),
+                        "blurb": meta.get("blurb", meta.get("description", "")),
+                        "example": meta.get("example", ""),
                     }
                 )
     _skill_cache = cache
@@ -192,6 +195,13 @@ def get_skill_bundle() -> dict:
                     "description": meta.get("description", ""),
                     "triggers": trigger_list,
                     "content": body,
+                    # v0.42.0: the catalogue fields — what the skill
+                    # does in plain words, where it shelves, and an
+                    # example to try. Frontmatter-authored; the
+                    # description is the honest fallback.
+                    "category": meta.get("category", "More skills"),
+                    "blurb": meta.get("blurb", meta.get("description", "")),
+                    "example": meta.get("example", ""),
                 }
             )
     else:
@@ -202,6 +212,9 @@ def get_skill_bundle() -> dict:
                 "description": s["description"],
                 "triggers": s["triggers"],
                 "content": s["content"],
+                "category": s.get("category", "More skills"),
+                "blurb": s.get("blurb", s["description"]),
+                "example": s.get("example", ""),
             }
             for s in _skill_cache
         ]

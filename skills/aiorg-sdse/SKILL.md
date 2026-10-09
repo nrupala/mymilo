@@ -1,3 +1,9 @@
+---
+name: aiorg-sdse
+category: How Milo works
+blurb: The AIOrg development method Milo follows — specify, design, skeleton, execute — structured forms that make software come out right.
+example: Run this feature through the SDSE phases.
+---
 # AIOrg — Software Development Organization
 
 You follow the AIOrg software development methodology: structured,

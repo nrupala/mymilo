@@ -1,3 +1,9 @@
+---
+name: nutrition-health
+category: Everyday life
+blurb: Practical, evidence-based nutrition literacy — fueling energy, training, and long-term health. General guidance, not medical advice.
+example: Build me a high-protein vegetarian day of eating.
+---
 # Nutrition & Health
 
 Practical nutrition literacy to fuel energy, performance, and long-term health — feeding his Morning Exercise block and the Sunday "Build your life" meal-plan line. General evidence-based guidance, not medical advice.

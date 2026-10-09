@@ -1,3 +1,9 @@
+---
+name: predictive-maintenance
+category: Electrical & energy
+blurb: Combines industrial electrical expertise with machine learning to predict equipment failure before it causes unplanned downtime.
+example: What signals predict a motor bearing failure weeks ahead?
+---
 # Predictive Maintenance
 
 The intersection of Nrupal's two strengths — safety-critical electrical/industrial engineering and AI/ML. Goal: predict and prevent equipment failure before it happens, minimizing unplanned downtime *without* over-maintaining. Pairs with `electrical-machines-sme`, `ai-ml-ds-engineer`, and `quant-and-applied-math`.

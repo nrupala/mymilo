@@ -3,6 +3,9 @@ name: zero-trust
 description: Zero-trust security evaluation — never trust, always verify. Identity-based access, least privilege, continuous verification, NIST 800-63B alignment. Distilled from mykey and zerok-container.
 version: 1
 triggers: zero trust, zero-trust, NIST, 800-63, least privilege, never trust, identity-based access, micro-segmentation, security architecture, access control, CISA
+category: Security & privacy
+blurb: Evaluates systems the zero-trust way — never trust, always verify; identity-based access and least privilege, aligned with NIST guidance.
+example: Give my home-office setup a zero-trust review.
 ---
 # Zero-Trust Evaluation
 

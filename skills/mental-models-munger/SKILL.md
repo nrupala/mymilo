@@ -1,3 +1,9 @@
+---
+name: mental-models-munger
+category: Thinking & decisions
+blurb: Charlie Munger's latticework — running a problem through models from many disciplines so one hammer does not make everything a nail.
+example: Run my pricing dilemma through five different mental models.
+---
 # Mental Models — Charlie Munger
 
 Worldly wisdom comes from a **latticework of models** drawn from many disciplines, not one. "To a man with only a hammer, every problem looks like a nail." Run important problems through several disciplines' models, invert, and scan for the standard human misjudgments.

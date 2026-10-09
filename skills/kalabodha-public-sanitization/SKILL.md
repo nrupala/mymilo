@@ -1,3 +1,9 @@
+---
+name: kalabodha-public-sanitization
+category: How Milo works
+blurb: The sanitization rules every public KalaBodha post passes before it ships — names, claims, and safety checked.
+example: Sanitize this KalaBodha draft for public posting.
+---
 # KalaBodha Public Content Sanitization
 
 KalaBodha (renamed from KalaVault — always use **KalaBodha** in public content) is public-facing. Before any public KalaBodha/KalaVault content ships, sanitize it against these rules. The goal is to share the work and ideas without exposing Nrupal's employer, colleagues, or contacts.

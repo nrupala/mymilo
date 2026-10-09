@@ -3,6 +3,9 @@ name: budget-engine
 description: Household budget and inflation-real analysis (BEE engine).
 version: 1
 triggers: budget, household budget, inflation, expenses, spending, cost of living, save money
+category: Money & markets
+blurb: Builds a household budget in seven steps and shows it in inflation-real terms, so you see what your spending is actually doing year over year.
+example: Help me with my household budget.
 ---
 # Budget Engine
 

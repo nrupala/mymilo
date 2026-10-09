@@ -45,6 +45,7 @@ def test_record_and_rollup_savings_math(tmp_path):
             actual_prompt=400,
             actual_completion=50,
             full_history_tokens=1000,
+            conversation_tokens=400,
             cache_n=160,
             prompt_n=400,
             utilization=0.1,
@@ -53,7 +54,8 @@ def test_record_and_rollup_savings_math(tmp_path):
     out = shape_rollup(raw, 7)
     assert out["requests"] == 2
     assert out["prompt_tokens"] == 800
-    # Baseline 2000 vs actual 800 on those rows → 1200 saved, 60%.
+    # Conversation comparison: baseline 2000 vs 800 actually sent for
+    # the conversation → 1200 saved, 60%.
     assert out["full_history_baseline_tokens"] == 2000
     assert out["tokens_saved_vs_full_history"] == 1200
     assert out["savings_pct"] == 60.0
@@ -61,6 +63,17 @@ def test_record_and_rollup_savings_math(tmp_path):
     assert out["cache_reuse_pct"] == 40.0
     assert out["routes"][0]["route"] == "local"
     assert out["routes"][0]["requests"] == 2
+
+
+def test_savings_ignores_rows_without_conversation_tokens(tmp_path):
+    # Pre-v0.38.1 rows have no conversation_tokens: excluded from the
+    # savings comparison entirely (their baseline must not leak in).
+    db = _db(tmp_path)
+    db.record_telemetry(route="local", actual_prompt=400, full_history_tokens=1000)
+    out = shape_rollup(db.telemetry_rollup(SINCE), 7)
+    assert out["requests"] == 1
+    assert out["full_history_baseline_tokens"] == 0
+    assert out["savings_pct"] is None
 
 
 def test_estimator_bias_and_calibration_warning(tmp_path):
@@ -126,12 +139,14 @@ def test_build_chat_record():
             "choices": [{"finish_reason": "stop"}],
         },
         full_history_tokens=5000,
+        conversation_tokens=1800,
     )
     assert rec["actual_prompt"] == 322
     assert rec["cache_n"] == 100
     assert rec["finish_reason"] == "stop"
     assert rec["trimmed_messages"] == 2
     assert rec["full_history_tokens"] == 5000
+    assert rec["conversation_tokens"] == 1800
 
 
 # ----------------------------------------------------------------------

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.38.1 — 2026-10-09
+- Telemetry fix: the slice-4 savings metric compared unlike quantities
+  (transcript-only baseline vs whole actual prompt incl. fixed
+  overhead) and reported negative savings on short sessions. The
+  rollup now compares the conversation only, on both sides:
+  `full_history_tokens` (naive replay of the whole transcript) vs the
+  new `conversation_tokens` column (schema v7) — what the engine
+  actually sent for the conversation (recent slice + summary tier +
+  retrieval tier + new turn). Live data also showed the tokenizer
+  estimate tracking actual prompt tokens within ~2%.
+
 ## 0.38.0 — 2026-10-09
 - Token-Efficiency Engine, slice 4 — telemetry + savings rollup:
   every chat request records one plan-vs-actual row (`engine_telemetry`,

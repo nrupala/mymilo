@@ -1131,14 +1131,30 @@ def create_app(
         # request for the savings rollup + estimator calibration.
         # Best-effort — telemetry must never break a chat response.
         try:
+            from . import tokenplan as _tp
             from .telemetry import build_chat_record
             from .tokenplan import CHARS_TOKEN_RATIO
 
             full_history_tokens = None
+            conversation_tokens = None
             if session_id:
                 chars = memory.session_content_chars(session_id)
                 if chars:
                     full_history_tokens = int(chars * CHARS_TOKEN_RATIO)
+                # What the engine actually sent for the conversation:
+                # history slice + summary tier + retrieval tier + the
+                # new turn (fixed overhead excluded from both sides of
+                # the savings comparison — see telemetry.py).
+                parts = [h.get("content", "") for h in history]
+                parts += [m.content for m in req.messages if m.role != "system"]
+                conversation_tokens = sum(
+                    _tp.estimate_tokens(p) + _tp.MESSAGE_OVERHEAD_TOKENS for p in parts
+                )
+                for tier_text in (summary_context, retrieval_block):
+                    if tier_text:
+                        conversation_tokens += (
+                            _tp.estimate_tokens(tier_text) + _tp.MESSAGE_OVERHEAD_TOKENS
+                        )
             db.record_telemetry(
                 **build_chat_record(
                     route=actual_model,
@@ -1146,6 +1162,7 @@ def create_app(
                     data=data,
                     degraded_from=degraded_from,
                     full_history_tokens=full_history_tokens,
+                    conversation_tokens=conversation_tokens,
                 )
             )
         except Exception:  # noqa: BLE001 — telemetry is best-effort

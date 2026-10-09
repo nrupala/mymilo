@@ -10,13 +10,18 @@ the backend's KV cache served for free, and whether the token
 estimator is drifting (bias beyond ±10% over ≥20 estimator-sourced
 samples raises a calibration warning).
 
-The savings baseline is an estimate by construction: at request time
-the endpoint records ``full_history_tokens`` — the session's whole
-stored transcript converted at the estimator's char ratio — i.e. what
-a naive full-history prompt would have carried for the conversation
-portion. It excludes persona/skill/RAG overhead on both sides of the
-comparison, so the percentage is honest about the tiering effect and
-slightly conservative overall.
+The savings baseline is an estimate by construction, and it compares
+like with like — the CONVERSATION only. At request time the endpoint
+records ``full_history_tokens`` (the session's whole stored transcript
+at the estimator's char ratio — what naive replay would send for the
+conversation) and ``conversation_tokens`` (what the engine actually
+sent for the conversation: recent history slice + summary tier +
+retrieval tier + the new turn, estimated from the assembled parts).
+Fixed prompt overhead (persona, skills, dynamic blocks) is excluded
+from BOTH sides — an earlier definition subtracted the whole actual
+prompt (overhead included) from the transcript-only baseline and
+reported negative "savings" on short sessions; that was a definition
+error, corrected in v0.38.1.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ def build_chat_record(
     data: dict,
     degraded_from: str | None = None,
     full_history_tokens: int | None = None,
+    conversation_tokens: int | None = None,
 ) -> dict[str, Any]:
     """Assemble a telemetry row from the token plan + backend response."""
     usage = data.get("usage") or {}
@@ -54,6 +60,7 @@ def build_chat_record(
         "cache_n": timings.get("cache_n"),
         "prompt_n": timings.get("prompt_n"),
         "full_history_tokens": full_history_tokens,
+        "conversation_tokens": conversation_tokens,
         "finish_reason": choices[0].get("finish_reason"),
     }
 
@@ -65,7 +72,7 @@ def shape_rollup(raw: dict, days: int) -> dict[str, Any]:
     prompt_n = totals.get("promptn_sum") or 0
     cache_n = totals.get("cache_sum") or 0
     full = totals.get("full_sum") or 0
-    saved = full - (totals.get("prompt_with_full_sum") or 0) if full else 0
+    saved = full - (totals.get("conversation_sum") or 0) if full else 0
     est = bias.get("est") or 0
     samples = bias.get("n") or 0
     bias_pct = (

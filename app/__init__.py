@@ -2,4 +2,4 @@
 # Copyright (c) 2026 Nrupal Akolkar
 """MyMilo — the native town-like buddy, resident interface of the agentic OS."""
 
-__version__ = "0.38.1"
+__version__ = "0.39.0"

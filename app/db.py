@@ -138,13 +138,14 @@ CREATE TABLE IF NOT EXISTS engine_telemetry (
     cache_n INTEGER,
     prompt_n INTEGER,
     full_history_tokens INTEGER,
+    conversation_tokens INTEGER,
     finish_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_engine_telemetry_ts ON engine_telemetry(ts);
 CREATE INDEX IF NOT EXISTS idx_engine_telemetry_route ON engine_telemetry(route);
 """
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def _now() -> str:
@@ -165,6 +166,16 @@ class Database:
             self._conn.executescript(SCHEMA_V4)
             self._conn.executescript(SCHEMA_V5)
             self._conn.executescript(SCHEMA_V6)
+            # v7: engine_telemetry.conversation_tokens (slice 4 metric
+            # fix) — guarded ALTER for databases created under v6.
+            cols = {
+                r[1] for r in self._conn.execute("PRAGMA table_info(engine_telemetry)")
+            }
+            if "conversation_tokens" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE engine_telemetry"
+                    " ADD COLUMN conversation_tokens INTEGER"
+                )
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
             cur = self._conn.execute(
@@ -530,6 +541,7 @@ class Database:
         cache_n: int | None = None,
         prompt_n: int | None = None,
         full_history_tokens: int | None = None,
+        conversation_tokens: int | None = None,
         finish_reason: str | None = None,
     ) -> int:
         with self._lock:
@@ -538,8 +550,8 @@ class Database:
                 " degraded_from, estimate_source, estimated_input,"
                 " actual_prompt, actual_completion, planned_max_tokens,"
                 " utilization, trimmed_messages, cache_n, prompt_n,"
-                " full_history_tokens, finish_reason)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " full_history_tokens, conversation_tokens, finish_reason)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     _now(),
                     route,
@@ -555,6 +567,7 @@ class Database:
                     cache_n,
                     prompt_n,
                     full_history_tokens,
+                    conversation_tokens,
                     finish_reason,
                 ),
             )
@@ -576,9 +589,9 @@ class Database:
                 " COALESCE(SUM(actual_completion), 0) AS completion_sum,"
                 " COALESCE(SUM(cache_n), 0) AS cache_sum,"
                 " COALESCE(SUM(prompt_n), 0) AS promptn_sum,"
-                " COALESCE(SUM(full_history_tokens), 0) AS full_sum,"
-                " COALESCE(SUM(CASE WHEN full_history_tokens IS NOT NULL"
-                " THEN actual_prompt ELSE 0 END), 0) AS prompt_with_full_sum,"
+                " COALESCE(SUM(CASE WHEN conversation_tokens IS NOT NULL"
+                " THEN full_history_tokens ELSE 0 END), 0) AS full_sum,"
+                " COALESCE(SUM(conversation_tokens), 0) AS conversation_sum,"
                 " COALESCE(SUM(CASE WHEN utilization >= 0.8"
                 " THEN 1 ELSE 0 END), 0) AS over80_n"
                 " FROM engine_telemetry WHERE ts >= ?",

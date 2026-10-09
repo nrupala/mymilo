@@ -91,6 +91,13 @@ class OSConfig:
     # a thin client of the OS. The local router stays until the OS
     # endpoint is live; its deletion is a one-PR change then.
     endpoint: str | None = None
+    # Token-planning registry for the os route (Engine slice 1.1). The
+    # window must match the effective window behind the endpoint (on
+    # Aetheris the dispatcher upstream is Phi-4-mini at --ctx-size
+    # 8192, so the os route plans against 8192).
+    context_window: int | None = None
+    default_max_tokens: int | None = None
+    max_output_tokens: int | None = None
 
 
 @dataclass
@@ -219,11 +226,31 @@ class Settings:
         )
 
         os_cfg = data.get("os", {})
+
+        def _os_int(key: str, env_key: str) -> int | None:
+            raw = os.environ.get(env_key, os_cfg.get(key))
+            return int(raw) if raw is not None else None
+
         s.os = OSConfig(
-            endpoint=os.environ.get("MYMILO_OS_ENDPOINT", os_cfg.get("endpoint"))
+            endpoint=os.environ.get("MYMILO_OS_ENDPOINT", os_cfg.get("endpoint")),
+            context_window=_os_int("context_window", "MYMILO_OS_CONTEXT_WINDOW"),
+            default_max_tokens=_os_int(
+                "default_max_tokens", "MYMILO_OS_DEFAULT_MAX_TOKENS"
+            ),
+            max_output_tokens=_os_int(
+                "max_output_tokens", "MYMILO_OS_MAX_OUTPUT_TOKENS"
+            ),
         )
         if s.os.endpoint:
-            s.models.append(ModelRoute(name="os", base_url=s.os.endpoint.rstrip("/")))
+            s.models.append(
+                ModelRoute(
+                    name="os",
+                    base_url=s.os.endpoint.rstrip("/"),
+                    context_window=s.os.context_window,
+                    default_max_tokens=s.os.default_max_tokens,
+                    max_output_tokens=s.os.max_output_tokens,
+                )
+            )
             s.default_model = "os"
         elif not s.route_for(s.default_model) and s.models:
             s.default_model = s.models[0].name

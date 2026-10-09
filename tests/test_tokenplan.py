@@ -183,6 +183,31 @@ def test_settings_load_token_registry(tmp_path):
     assert route.max_output_tokens == 4096
 
 
+def test_settings_os_route_carries_registry(tmp_path, monkeypatch):
+    # The os route is the production default (AxiomSpine dispatcher);
+    # its registry fields come from the [os] section / env so the
+    # planner guards the default path too.
+    monkeypatch.delenv("MYMILO_OS_ENDPOINT", raising=False)
+    cfg = tmp_path / "mymilo.toml"
+    cfg.write_text(
+        "[os]\n"
+        'endpoint = "http://127.0.0.1:7070/v1"\n'
+        "context_window = 8192\n"
+        "default_max_tokens = 1024\n"
+        "max_output_tokens = 4096\n"
+    )
+    settings = Settings.load(str(cfg))
+    route = settings.route_for("os")
+    assert route is not None
+    assert settings.default_model == "os"
+    assert route.context_window == 8192
+    assert route.default_max_tokens == 1024
+    assert route.max_output_tokens == 4096
+    plan = plan_max_tokens(route, estimated_input=1000)
+    assert plan.fits is True
+    assert plan.planned_max_tokens == 1024
+
+
 # ----------------------------------------------------------------------
 # Router backstop
 # ----------------------------------------------------------------------

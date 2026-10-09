@@ -39,6 +39,9 @@ class ModelRoute:
     context_window: int | None = None
     default_max_tokens: int | None = None
     max_output_tokens: int | None = None
+    # Backpressure (Engine slice 3): max in-flight requests on this
+    # route. None = router default (1 for local backends, 8 for cloud).
+    max_concurrency: int | None = None
 
 
 @dataclass
@@ -184,6 +187,11 @@ class Settings:
                     max_output_tokens=(
                         int(m["max_output_tokens"])
                         if m.get("max_output_tokens") is not None
+                        else None
+                    ),
+                    max_concurrency=(
+                        int(m["max_concurrency"])
+                        if m.get("max_concurrency") is not None
                         else None
                     ),
                 )

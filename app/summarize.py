@@ -20,6 +20,13 @@ SUMMARIZE_THRESHOLD = 30
 RECENT_KEEP = 20
 
 
+# Sessions with a summarization currently running (Engine slice 3).
+# The chat endpoint fires this as a background task on every turn of a
+# long session; without the guard, concurrent runs chain off each
+# other's checkpoints and the coverage accounting degrades.
+_IN_FLIGHT: set[str] = set()
+
+
 async def maybe_summarize_session(
     memory: Any,
     router: Any,
@@ -27,10 +34,24 @@ async def maybe_summarize_session(
 ) -> dict | None:
     """Check if a session needs summarization, and do it if so.
 
-    Returns the summary dict if a new summary was created, None otherwise.
-    Runs synchronously in the chat flow — the summarization is a single
-    fast local-model call.
+    Returns the summary dict if a new summary was created, None
+    otherwise — including when a run for this session is already in
+    flight (the next turn picks up whatever remains).
     """
+    if session_id in _IN_FLIGHT:
+        return None
+    _IN_FLIGHT.add(session_id)
+    try:
+        return await _summarize_once(memory, router, session_id)
+    finally:
+        _IN_FLIGHT.discard(session_id)
+
+
+async def _summarize_once(
+    memory: Any,
+    router: Any,
+    session_id: str,
+) -> dict | None:
     count = memory.count_messages(session_id)
     if count < SUMMARIZE_THRESHOLD:
         return None
@@ -95,12 +116,20 @@ async def maybe_summarize_session(
         if not summary_text:
             return None
 
+        # Checkpoint v2 coverage is cumulative (slice 3 fix): chain
+        # from the previous checkpoint so the recorded coverage always
+        # states how many turns the current summary embodies in total,
+        # not just the latest slice.
+        prev_from = (existing or {}).get("covered_from")
+        if prev_from is None:
+            prev_from = start_from
+        prev_count = (existing or {}).get("covered_count") or 0
         memory.save_summary(
             session_id,
             summary_text,
             cutoff_id,
-            covered_from=start_from,
-            covered_count=len(old_messages),
+            covered_from=prev_from,
+            covered_count=prev_count + len(old_messages),
             model="local",
         )
         return {

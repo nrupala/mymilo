@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.37.0 — 2026-10-09
+- Token-Efficiency Engine, slice 3 — router resilience (`app/router.py`):
+  health gate (after 2 consecutive failures a route refuses fast for a
+  15s cooldown instead of waiting out backend timeouts), backpressure
+  (per-route in-flight semaphore — 1 for single-slot local servers, 8
+  for cloud, `max_concurrency` in config — with a 30s queue wait, then
+  a friendly `BackendBusyError` 503), and ordered degradation in the
+  chat endpoint: an "auto" request whose local route is down/gated/
+  busy retries once on the first keyed cloud route and reports
+  `degraded_from`; an explicit model choice is never silently swapped.
+  `/health` route stats now include `gated`, `in_flight`,
+  `max_concurrency`.
+- Summarizer fix (slice 2 verification wart): a per-session in-flight
+  guard stops concurrent background summarizers from racing, and
+  checkpoint coverage (`covered_from`/`covered_count`) is now
+  cumulative across chained checkpoints.
+
 ## 0.36.0 — 2026-10-09
 - Token-Efficiency Engine, slice 2 (`app/context_tiers.py`): two-tier
   context assembly in the chat path. HCA tier: the session compaction

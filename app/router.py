@@ -8,6 +8,7 @@ Cost-aware routing and the per-call ledger arrive in Phase 4.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import time
 from collections.abc import Callable
@@ -18,6 +19,23 @@ import httpx
 
 from .config import ModelRoute, Settings
 from .ledger import compute_cost
+
+# Health gate (Engine slice 3): after this many consecutive failures a
+# route is gated — calls fail fast instead of waiting out a long
+# backend timeout — until the cooldown passes.
+GATE_FAILURE_THRESHOLD = 2
+GATE_COOLDOWN_S = 15.0
+# Backpressure: how long a call may wait for a route slot before it is
+# refused as busy (the chat endpoint maps that to a friendly 503).
+QUEUE_WAIT_S = 30.0
+
+
+class BackendBusyError(Exception):
+    """All route slots busy and the queue wait elapsed (Engine slice 3)."""
+
+    def __init__(self, model: str):
+        self.model = model
+        super().__init__(f"backend for model '{model}' is busy (queue full)")
 
 
 class ModelNotFoundError(Exception):
@@ -48,6 +66,9 @@ class ModelRouter:
         settings: Settings,
         transport: httpx.BaseTransport | None = None,
         ledger: Callable[[dict[str, Any]], Any] | None = None,
+        gate_threshold: int = GATE_FAILURE_THRESHOLD,
+        gate_cooldown_s: float = GATE_COOLDOWN_S,
+        queue_wait_s: float = QUEUE_WAIT_S,
     ):
         self.settings = settings
         self._transport = transport
@@ -60,6 +81,13 @@ class ModelRouter:
         # consecutive_failures drives the cooldown below.
         self._last_used: dict[str, str] = {}
         self._failures: dict[str, int] = {}
+        # Engine slice 3: health gate + backpressure state.
+        self._gate_threshold = gate_threshold
+        self._gate_cooldown_s = gate_cooldown_s
+        self._queue_wait_s = queue_wait_s
+        self._last_failure_at: dict[str, float] = {}
+        self._semaphores: dict[str, asyncio.Semaphore] = {}
+        self._in_flight: dict[str, int] = {}
 
     def _client(self, timeout_s: float) -> httpx.AsyncClient:
         # trust_env=False: backend connections are direct and deterministic.
@@ -96,6 +124,60 @@ class ModelRouter:
         ):
             payload = {**payload, "max_tokens": route.max_output_tokens}
         started = time.monotonic()
+        # Health gate (Engine slice 3): a route in failure cooldown
+        # refuses fast instead of waiting out a long backend timeout;
+        # the chat endpoint may degrade "auto" requests to another
+        # route, everything else gets the honest 503.
+        if self._is_gated(route.name):
+            await self._record(model_name, route, None, None, started, status="gated")
+            raise UpstreamUnavailableError(model_name, route.base_url)
+        # Backpressure: bounded concurrency per route with a bounded
+        # queue wait — a saturated backend gets a clear busy signal,
+        # not a pile-up of doomed requests.
+        sem = self._semaphore_for(route)
+        try:
+            await asyncio.wait_for(sem.acquire(), timeout=self._queue_wait_s)
+        except TimeoutError:
+            await self._record(model_name, route, None, None, started, status="busy")
+            raise BackendBusyError(model_name) from None
+        self._in_flight[route.name] = self._in_flight.get(route.name, 0) + 1
+        try:
+            return await self._send(model_name, route, payload, started)
+        finally:
+            self._in_flight[route.name] -= 1
+            sem.release()
+
+    def _concurrency_for(self, route: ModelRoute) -> int:
+        """In-flight limit for a route (Engine slice 3).
+
+        Declared per route in config; the default matches the serving
+        reality: single-slot local servers (llama.cpp --parallel 1)
+        get 1, cloud endpoints get more.
+        """
+        if route.max_concurrency:
+            return route.max_concurrency
+        if "127.0.0.1" in route.base_url or "localhost" in route.base_url:
+            return 1
+        return 8
+
+    def _semaphore_for(self, route: ModelRoute) -> asyncio.Semaphore:
+        sem = self._semaphores.get(route.name)
+        if sem is None:
+            sem = asyncio.Semaphore(self._concurrency_for(route))
+            self._semaphores[route.name] = sem
+        return sem
+
+    def _is_gated(self, route_name: str) -> bool:
+        if self._failures.get(route_name, 0) < self._gate_threshold:
+            return False
+        last = self._last_failure_at.get(route_name)
+        if last is None:
+            return False
+        return (time.monotonic() - last) < self._gate_cooldown_s
+
+    async def _send(
+        self, model_name: str, route: ModelRoute, payload: dict, started: float
+    ) -> dict:
         try:
             async with self._client(route.timeout_s) as client:
                 resp = await client.post(
@@ -132,13 +214,18 @@ class ModelRouter:
 
     def _note_failure(self, route_name: str) -> None:
         self._failures[route_name] = self._failures.get(route_name, 0) + 1
+        self._last_failure_at[route_name] = time.monotonic()
 
     def route_stats(self) -> dict[str, dict[str, Any]]:
-        """Lifecycle stats per route: last use and failure streak."""
+        """Lifecycle stats per route: last use, failure streak, gate and
+        backpressure state (Engine slice 3)."""
         return {
             r.name: {
                 "last_used_at": self._last_used.get(r.name),
                 "consecutive_failures": self._failures.get(r.name, 0),
+                "gated": self._is_gated(r.name),
+                "in_flight": self._in_flight.get(r.name, 0),
+                "max_concurrency": self._concurrency_for(r),
             }
             for r in self.settings.models
         }

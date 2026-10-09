@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.35.1 — 2026-10-09
+- Token planner now covers the default path: the `os` route (AxiomSpine
+  dispatcher) carries registry fields from the `[os]` config section or
+  `MYMILO_OS_*` env vars. Found by live verification of 0.35.0 — "auto"
+  traffic routed to `os`, which had no window registered and was
+  therefore unplanned. On Aetheris the dispatcher's upstream is
+  Phi-4-mini (`--ctx-size 8192`), so the os route plans against 8192.
+
 ## 0.35.0 — 2026-10-09
 - Token-Efficiency Engine, slice 1 (`app/tokenplan.py`): per-route token
   planning registry in config (`context_window`, `default_max_tokens`,

@@ -787,14 +787,19 @@ def create_app(
 
         episodic = EpisodicMemory(memory)
         episodes = await episodic.get_relevant_history(
-            user_email, user_text, max_episodes=2
+            user_email, user_text, max_episodes=4
         )
-        # Inject episode summaries as context (if any found)
-        episode_context = ""
-        if episodes:
-            episode_context = "\n".join(
-                f"[Past: {ep['title']}] {ep.get('summary', '')}" for ep in episodes
-            )
+        # CSA retrieval tier (Engine slice 2): relevant semantic facts +
+        # episode snippets, budget-capped, assembled by context_tiers.
+        from .context_tiers import retrieval_tier
+
+        profile_facts: list[dict] = []
+        try:
+            profile = app.state.semantic.get_profile(user_email)
+            profile_facts = [f for group in profile.values() for f in group]
+        except Exception:
+            profile_facts = []
+        retrieval_block = retrieval_tier(episodes, profile_facts, query=user_text)
 
         messages = [m.model_dump() for m in req.messages]
         # Insert history after any leading system messages.
@@ -840,14 +845,13 @@ def create_app(
                 },
             )
             insert_at += 1
-        # Inject episodic memory (past relevant sessions) after history
-        if episode_context:
+        # Inject the retrieval tier between the summary tier and the
+        # recent history (Engine slice 2 assembly order: stable prefix,
+        # summary tier, retrieval tier, dynamic blocks, history, turn).
+        if retrieval_block:
             messages.insert(
-                insert_at + len(history),
-                {
-                    "role": "system",
-                    "content": f"Relevant past conversations:\n{episode_context}",
-                },
+                insert_at,
+                {"role": "system", "content": retrieval_block},
             )
         memory.add_message(session_id, "user", user_text)
 
@@ -881,7 +885,12 @@ def create_app(
             "When the user asks about previous discussions, acknowledge "
             "you can look them up via the session history."
         )
-        messages = [
+        # Dynamic per-turn blocks (Engine slice 2): collected here and
+        # spliced in after the stable prefix further below, so the
+        # cacheable system context stays byte-stable across turns —
+        # previously this block was prepended first and its clock text
+        # invalidated the whole prefix cache every minute.
+        dynamic_blocks: list[dict] = [
             {
                 "role": "system",
                 "content": f"Today is {today}. The current time is {current_time}. "
@@ -891,8 +900,7 @@ def create_app(
                 "Never refuse a terse or ambiguous follow-up outright — use "
                 "the conversation context to interpret it, and ask a "
                 "clarifying question if you truly cannot tell. " + memory_note,
-            },
-            *messages,
+            }
         ]
         # Cross-session lookup: "what did we discuss on [date]?"
         from datetime import datetime as _dt
@@ -918,10 +926,7 @@ def create_app(
                     "If the user asks about a specific one, summarize what "
                     "you know from its title and offer to load it."
                 )
-                messages = [
-                    {"role": "system", "content": "\n".join(lines)},
-                    *messages,
-                ]
+                dynamic_blocks.append({"role": "system", "content": "\n".join(lines)})
         if skill:
             active_skill = skill["name"]
             messages = [
@@ -948,10 +953,7 @@ def create_app(
                     results = await exa_search(user_text, exa_key)
                     ctx = format_search_context(results)
                     if ctx:
-                        messages = [
-                            {"role": "system", "content": ctx},
-                            *messages,
-                        ]
+                        dynamic_blocks.append({"role": "system", "content": ctx})
                 except Exception:  # noqa: BLE001 — search is best-effort
                     pass
             # Live market data for "brief me on the market today".
@@ -965,10 +967,16 @@ def create_app(
                 indices = await fetch_indices()
                 brief = format_brief(indices)
                 if brief:
-                    messages = [
-                        {"role": "system", "content": brief},
-                        *messages,
-                    ]
+                    dynamic_blocks.append({"role": "system", "content": brief})
+
+        # Splice the dynamic blocks in after the stable system prefix
+        # (Engine slice 2): everything before this point is cacheable
+        # across turns; everything dynamic lands here, before history.
+        if dynamic_blocks:
+            from .context_tiers import dynamic_insert_index
+
+            _dyn_at = dynamic_insert_index(messages)
+            messages[_dyn_at:_dyn_at] = dynamic_blocks
 
         rag_sources_out: list[dict] = []
         citation_check: dict | None = None

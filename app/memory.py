@@ -72,6 +72,16 @@ class MemoryStore:
                 )
                 """
             )
+            # v0.36.0: compaction checkpoint v2 — coverage metadata so a
+            # summary records what it replaced (range + count + model).
+            scols = [r[1] for r in c.execute("PRAGMA table_info(session_summaries)")]
+            for col, ddl in (
+                ("covered_from", "INTEGER NOT NULL DEFAULT 0"),
+                ("covered_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("model", "TEXT"),
+            ):
+                if col not in scols:
+                    c.execute(f"ALTER TABLE session_summaries ADD COLUMN {col} {ddl}")
 
     def create_session(self, user_email: str = "", title: str = "New chat") -> str:
         sid = uuid.uuid4().hex[:12]
@@ -165,27 +175,47 @@ class MemoryStore:
         with sqlite3.connect(self.path) as c:
             c.row_factory = sqlite3.Row
             row = c.execute(
-                "SELECT summary, summarized_up_to, updated_at"
+                "SELECT summary, summarized_up_to, updated_at,"
+                " covered_from, covered_count, model"
                 " FROM session_summaries WHERE session_id=?",
                 (session_id,),
             ).fetchone()
             return dict(row) if row else None
 
     def save_summary(
-        self, session_id: str, summary: str, summarized_up_to: int
+        self,
+        session_id: str,
+        summary: str,
+        summarized_up_to: int,
+        covered_from: int = 0,
+        covered_count: int = 0,
+        model: str | None = None,
     ) -> None:
-        """Store or update the summary for a session."""
+        """Store or update the summary (compaction checkpoint) for a session."""
         now = time.time()
         with sqlite3.connect(self.path) as c:
             c.execute(
                 "INSERT INTO session_summaries"
-                " (session_id, summary, summarized_up_to, created_at, updated_at)"
-                " VALUES (?,?,?,?,?)"
+                " (session_id, summary, summarized_up_to, created_at, updated_at,"
+                " covered_from, covered_count, model)"
+                " VALUES (?,?,?,?,?,?,?,?)"
                 " ON CONFLICT(session_id) DO UPDATE SET"
                 " summary=excluded.summary,"
                 " summarized_up_to=excluded.summarized_up_to,"
+                " covered_from=excluded.covered_from,"
+                " covered_count=excluded.covered_count,"
+                " model=excluded.model,"
                 " updated_at=excluded.updated_at",
-                (session_id, summary, summarized_up_to, now, now),
+                (
+                    session_id,
+                    summary,
+                    summarized_up_to,
+                    now,
+                    now,
+                    covered_from,
+                    covered_count,
+                    model,
+                ),
             )
 
     def count_messages(self, session_id: str) -> int:

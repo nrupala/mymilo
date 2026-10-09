@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.36.0 — 2026-10-09
+- Token-Efficiency Engine, slice 2 (`app/context_tiers.py`): two-tier
+  context assembly in the chat path. HCA tier: the session compaction
+  checkpoint is injected under a hard 1024-token budget with a header
+  naming its coverage. CSA tier: per-turn retrieval — semantic facts
+  ranked by relevance plus past-session episode snippets built from
+  real preview content (replacing the "[Past: title] Past session:
+  title" stub) — each item capped at 256 tokens, the tier at 2048.
+- Cache-stable assembly order: stable system/skill prefix → summary
+  tier → retrieval tier → dynamic per-turn blocks → recent history →
+  current turn. The date/time block (which changes every minute) was
+  previously prepended first, invalidating llama.cpp's prefix cache on
+  every turn; it now lands with the other dynamic blocks (search
+  results, market briefs, past-session notes) after the stable prefix.
+- Compaction checkpoint v2: `session_summaries` gains `covered_from`,
+  `covered_count`, and `model` (migrated in place); the summarizer
+  records what each checkpoint replaced.
+
 ## 0.35.1 — 2026-10-09
 - Token planner now covers the default path: the `os` route (AxiomSpine
   dispatcher) carries registry fields from the `[os]` config section or

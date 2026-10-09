@@ -95,7 +95,14 @@ async def maybe_summarize_session(
         if not summary_text:
             return None
 
-        memory.save_summary(session_id, summary_text, cutoff_id)
+        memory.save_summary(
+            session_id,
+            summary_text,
+            cutoff_id,
+            covered_from=start_from,
+            covered_count=len(old_messages),
+            model="local",
+        )
         return {
             "summary": summary_text,
             "summarized_up_to": cutoff_id,
@@ -106,8 +113,14 @@ async def maybe_summarize_session(
 
 
 def get_summary_context(memory: Any, session_id: str) -> str:
-    """Get the summary as a context string for injection, or empty."""
+    """Get the summary as a context string for injection, or empty.
+
+    Formatted as the HCA tier (Engine slice 2): checkpoint header with
+    coverage, hard-capped at the tier budget.
+    """
+    from .context_tiers import summary_tier
+
     summary = memory.get_summary(session_id)
-    if not summary or not summary.get("summary"):
+    if not summary:
         return ""
-    return f"[Earlier in this conversation: {summary['summary']}]"
+    return summary_tier(summary) or ""

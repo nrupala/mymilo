@@ -171,11 +171,13 @@ form.addEventListener('submit', async (e) => {
       if (j.background_job_id) {
         pollBackgroundJob(j.background_job_id);
       }
-      if (j.active_skill) {
-        out = '🛠 ' + j.active_skill + '\n\n' + out;
+      let display = out;
+      if (j.sources && j.sources.length) {
+        display += '\n\nSources: ' +
+          j.sources.map(x => x.title).join(' \u00b7 ');
       }
       if (j.citation_check && !j.citation_check.ok) {
-        out += '\n\n⚠ unverified citations: ' +
+        display += '\n\n⚠ unverified citations: ' +
           j.citation_check.unresolved.map(u => `${u.filename} chunk ${u.chunk}`).join(', ');
       }
       // Adopt server session id (first message creates it).
@@ -184,7 +186,7 @@ form.addEventListener('submit', async (e) => {
         loadSessions();
       }
       window.chatMessages.push({role: 'assistant', content: out});
-      addMsg('assistant', out);
+      addMsg('assistant', display);
     }
   } catch (err) {
     thinking.remove();
@@ -211,7 +213,7 @@ function pollBackgroundJob(jobId) {
         const out = done.status === 'completed'
           ? '✅ Background task done:\n\n' + (done.result_summary || '(no summary)')
           : '❌ Background task failed: ' + (done.error || 'unknown error');
-        addMsg('assistant', out);
+        addMsg('assistant', display);
       }
     } catch (e) { /* keep polling */ }
   }, 5000);

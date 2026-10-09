@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.40.0 — 2026-10-09
+- Unified `sources` in every chat response: what the turn actually
+  used, in the order gathered — the active skill, semantic-memory
+  facts and past-chat episodes from the retrieval tier (which now
+  reports its provenance), live web results (title + URL) when a
+  freshness search ran, the live market brief when one was built,
+  and document chunks when RAG was enabled. Always present (empty
+  list when nothing was used), deduplicated by (type, title). The
+  older `active_skill` and `rag_sources` fields remain for
+  compatibility. Background-job results do not carry sources yet.
+- Web UI: answers show a "Sources: …" line built from the new field
+  (replacing the 🛠 skill prefix), and the sources line is kept out
+  of the conversation history sent back to the server.
+
 ## 0.39.0 — 2026-10-09
 - Device lifecycle completed on /devices: until now the page offered
   only Revoke, revoked rows stayed forever, and a fresh token meant

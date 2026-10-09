@@ -91,10 +91,11 @@ def test_retrieval_tier_facts_ranked_by_relevance():
         {"category": "identity", "key": "name", "value": "Nrupal"},
         {"category": "food", "key": "diet", "value": "vegan"},
     ]
-    out = retrieval_tier([], facts, query="what diet am I on")
+    out, sources = retrieval_tier([], facts, query="what diet am I on")
     assert out is not None
     assert "food/diet: vegan" in out
     assert "Nrupal" not in out  # zero-overlap fact is not retrieved
+    assert sources == [{"type": "memory", "title": "food/diet: vegan"}]
 
 
 def test_retrieval_tier_episode_uses_preview_snippet():
@@ -107,9 +108,10 @@ def test_retrieval_tier_episode_uses_preview_snippet():
             ],
         }
     ]
-    out = retrieval_tier(episodes, [], query="trip")
+    out, sources = retrieval_tier(episodes, [], query="trip")
     assert out is not None
     assert "[Past: Trip planning] Plan a trip to Banff" in out
+    assert sources == [{"type": "past chat", "title": "Trip planning"}]
 
 
 def test_retrieval_tier_item_and_tier_caps():
@@ -118,7 +120,7 @@ def test_retrieval_tier_item_and_tier_caps():
         {"title": f"S{i}", "preview": [{"role": "user", "content": big}]}
         for i in range(20)
     ]
-    out = retrieval_tier(episodes, [], query="x")
+    out, _sources = retrieval_tier(episodes, [], query="x")
     assert out is not None
     assert estimate_tokens(out) <= RETRIEVAL_TIER_BUDGET
     for line in out.splitlines()[1:]:
@@ -126,7 +128,7 @@ def test_retrieval_tier_item_and_tier_caps():
 
 
 def test_retrieval_tier_empty():
-    assert retrieval_tier([], []) is None
+    assert retrieval_tier([], []) == (None, [])
 
 
 # ----------------------------------------------------------------------

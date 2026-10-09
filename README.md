@@ -4,8 +4,9 @@
 resident. A FastAPI backend with an Apple-quality chat UI, an MCP server
 so other agents can call it, a file-based escalation queue to Wright
 (the human's builder agent), dual episodic + semantic memory, a
-priority-ordered context builder, 73 drop-a-file skills, and
-privacy-first Gmail/Calendar/Cloudflare/GitHub integrations.
+priority-ordered context builder, 81 drop-a-file skills with a
+plain-language catalogue, and privacy-first
+Gmail/Calendar/Cloudflare/GitHub integrations.
 
 Local-first, on his own hardware, multi-user (Nrupal + Natasha),
 no credits. Named "milo" between Nrupal and Wright.
@@ -33,8 +34,20 @@ History: [CHANGELOG.md](CHANGELOG.md).
   (`/v1/profile`); user-deletable.
 - **Unified context builder** — system, skill, episodic, RAG, and history
   assembled in priority order under a token budget.
-- **73 skills** — drop-a-file `skills/*/SKILL.md` with trigger phrases;
-  matched deterministically, always-on; vector rescan at `/v1/skills/rescan`.
+- **81 skills** — drop-a-file `skills/*/SKILL.md` with trigger phrases;
+  matched deterministically, and every skill can also be **run on
+  purpose** (chat requests may name a `skill`; the Android app has a
+  tap-to-run catalogue). Each skill carries a category, a
+  plain-language blurb, and an example — see
+  [docs/SKILLS.md](docs/SKILLS.md).
+- **Sources on every answer** — chat responses name what the turn
+  used (skill, memory fact, past chat, web result, market brief,
+  document chunk); nothing used, nothing claimed.
+- **Devices** — per-device tokens for native clients, with rotate
+  and remove; shown once, stored hashed ([/devices](docs/OPERATIONS.md#devices)).
+- **Guide** — a built-in user guide at `/guide` (quick start,
+  live skills catalogue, use cases, FAQ, About), mirrored in the
+  Android app and in [docs/USER-GUIDE.md](docs/USER-GUIDE.md).
 - **Integrations** — GitHub (live, 81 repos), Gmail/Calendar (privacy-first:
   connect per task, disconnect after, no retention), Cloudflare (zones, DNS,
   Workers).
@@ -43,6 +56,24 @@ History: [CHANGELOG.md](CHANGELOG.md).
   background_task), consent-gated actions, planner suggestions outbox.
 - **Fleet economics** — per-route cost ledger and quota flags
   (`/v1/ledger/summary`).
+- **Android app** — the native client
+  ([mymilo-native](https://github.com/nrupala/mymilo-native)):
+  on-device skill matching, offline tools, voice, in-app updates.
+
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [User guide](docs/USER-GUIDE.md) | What Milo can do, how to ask, FAQ — also served at `/guide` |
+| [Skills catalogue](docs/SKILLS.md) | All 81 skills: what each does, an example (generated — kept honest by a test) |
+| [Operations manual](docs/OPERATIONS.md) | Deployment, health, devices & tokens, configuration, deploys |
+| [Code guide](docs/CODE-GUIDE.md) | Architecture map, a chat turn end to end, how to write a skill |
+| [Connectors](docs/CONNECTORS.md) | What's connected, what's disconnected by default, what's next |
+| [Human, machine, agent](docs/HUMAN-MACHINE-AGENT.md) | The three actors, the routing ladder, Sources & Vault |
+| [Quality & gates](docs/QUALITY.md) | The four release gates, merge discipline, verification records |
+| [Shadow architecture](docs/SHADOW-ARCHITECTURE.md) | The design: Milo as shadow partner |
+| [Release gate](docs/RELEASE-GATE.md) | The verification doctrine in full |
+| [Backlog](docs/BACKLOG.md) | Queued work and known warts |
 
 ## Architecture
 
@@ -66,7 +97,7 @@ History: [CHANGELOG.md](CHANGELOG.md).
         +-------+--------+            +---------+----------+      +--------------------+
                 |                               |
         +-------v--------+            +---------v----------+
-        | Memory         |            | Skills (73)        |
+        | Memory         |            | Skills (81)        |
         | episodic +     |            | trigger-matched    |
         | semantic facts |            | drop-a-file        |
         +----------------+            +------------------+
@@ -81,8 +112,9 @@ History: [CHANGELOG.md](CHANGELOG.md).
 Key modules: `app/main.py` (FastAPI app, chat, sessions, MCP SSE,
 escalation), `app/mcp_server.py` (27-tool catalog), `app/memory.py`
 (episodic), `app/semantic.py` (facts + profile), `app/context_builder.py`
-(context assembly), `app/skills.py` (73 skills), `app/router.py` (model
-routing), `app/scheduler.py` + `app/jobs.py` (background jobs),
+(context assembly), `app/skills.py` (81 skills), `app/router.py` (model
+routing), `app/devices.py` (device tokens), `app/scheduler.py` +
+`app/jobs.py` (background jobs),
 `app/integrations/{github,gmail,calendar,cloudflare}.py`.
 
 ## Quickstart
@@ -156,9 +188,16 @@ curl localhost:8090/.well-known/mymilo.json
 curl localhost:8090/v1/profile
 curl -X DELETE localhost:8090/v1/profile/facts/<fact_id>
 
-# skills: list, rescan
-curl localhost:8090/v1/skills
-curl -X POST localhost:8090/v1/skills/rescan
+# skills: list, rescan (both require auth — a device token or a
+# signed-in browser session)
+curl localhost:8090/v1/skills -H "Authorization: Bearer <device-token>"
+curl -X POST localhost:8090/v1/skills/rescan -H "Authorization: Bearer <device-token>"
+
+# devices: the token lifecycle (register returns the token ONCE)
+curl -X POST localhost:8090/v1/devices -H "Authorization: Bearer <device-token>" \
+  -H 'Content-Type: application/json' -d '{"name": "My phone"}'
+curl -X POST localhost:8090/v1/devices/<id>/rotate -H "Authorization: Bearer <device-token>"
+curl -X POST localhost:8090/v1/devices/<id>/remove -H "Authorization: Bearer <device-token>"
 
 # background jobs + planner
 curl localhost:8090/v1/jobs
@@ -197,6 +236,7 @@ embedding model, e.g. `llama-server -m nomic-embed-text.gguf --embedding
 | `MYMILO_SCHEDULER_ENABLED` / `MYMILO_SCHEDULER_TICK` | Background scheduler |
 | `MYMILO_OS_ENDPOINT` | AxiomSpine/OS endpoint |
 | `MYMILO_EXA_API_KEY` | Exa web-search key |
+| `MYMILO_SUPPORT_URL` | Support-button destination served to clients (empty hides it) |
 | `MYMILO_CLOUD_API_KEY` | Cloud model key (e.g. OpenRouter) |
 | `GITHUB_TOKEN` | GitHub integration token |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare integration token |
@@ -210,14 +250,15 @@ never from the repo. See `vault/README.md`.
 app/           FastAPI: main, config, router, schemas, db, jobs, memory,
                semantic, context_builder, skills, mcp_server, integrations
 mcp/           MCP tool catalog JSON (19 core + github + gmail/calendar + cf)
-skills/        73 drop-a-file skills (SKILL.md each)
-templates/     Jinja2 UI (chat, jobs)
+skills/        81 drop-a-file skills (SKILL.md each, catalogued)
+templates/     Jinja2 UI (chat, devices, jobs, costs, documents, guide)
 static/        local stylesheet, zero external deps
 config/        example TOML
 vault/         git-ignored secrets (convention doc only)
 tests/         pytest suite (MockTransport — no network)
 evals/         retrieval evals
-docs/          design notes
+docs/          the documentation set — index in Documentation above
+scripts/       repo tooling (skills-doc generator)
 ```
 
 ## License

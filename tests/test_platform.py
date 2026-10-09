@@ -74,7 +74,10 @@ def skills_client(tmp_path):
     app = create_app(
         settings, transport=httpx.MockTransport(_chat), embedder=HashEmbedder()
     )
-    with TestClient(app) as c:
+    with TestClient(
+        app,
+        headers={"cf-access-authenticated-user-email": "test@example.com"},
+    ) as c:
         yield c, tmp_path
 
 

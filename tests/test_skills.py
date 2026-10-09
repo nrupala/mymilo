@@ -4,7 +4,7 @@
 
 from pathlib import Path
 
-from app.skills import match_skill, parse_frontmatter
+from app.skills import get_skill_by_name, match_skill, parse_frontmatter
 
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
@@ -67,3 +67,38 @@ def test_opencode_triggers():
 def test_travel_triggers():
     r = match_skill("find me a cheap flight to Delhi", SKILLS_DIR)
     assert r and r["name"] == "travel-fares"
+
+
+def test_get_skill_by_name_exact_and_case_insensitive():
+    r = get_skill_by_name("stock-analysis", SKILLS_DIR)
+    assert r and r["name"] == "stock-analysis"
+    assert r["content"]  # the instruction body rides along
+    r2 = get_skill_by_name("Stock-Analysis", SKILLS_DIR)
+    assert r2 and r2["name"] == "stock-analysis"
+
+
+def test_get_skill_by_name_unknown_and_blank():
+    assert get_skill_by_name("no-such-skill", SKILLS_DIR) is None
+    assert get_skill_by_name("", SKILLS_DIR) is None
+    assert get_skill_by_name("  ", SKILLS_DIR) is None
+
+
+def test_get_skill_by_name_finds_triggerless_skill(tmp_path):
+    """The point of deliberate invocation: most skills declare no
+    triggers and are unreachable by matching — by-name lookup must
+    still find them."""
+    d = tmp_path / "quiet-skill"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\n"
+        "name: quiet-skill\n"
+        "description: A skill with no triggers.\n"
+        "---\n"
+        "Do the quiet thing.\n",
+        encoding="utf-8",
+    )
+    r = get_skill_by_name("quiet-skill", tmp_path)
+    assert r and r["name"] == "quiet-skill"
+    assert "Do the quiet thing" in r["content"]
+    # …and trigger matching indeed cannot reach it:
+    assert match_skill("do the quiet thing", tmp_path) is None

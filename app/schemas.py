@@ -26,6 +26,10 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     rag: RAGParams = Field(default_factory=RAGParams)
     session_id: str | None = None
+    # v0.41.0: deliberate skill invocation (tap-to-run). When set and
+    # the skill exists, it is force-activated for this turn, taking
+    # precedence over trigger matching. Unknown names are ignored.
+    skill: str | None = None
 
 
 class JobCreate(BaseModel):

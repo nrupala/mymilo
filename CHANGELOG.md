@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.41.0 — 2026-10-09
+- Skills can be run on purpose: the chat request accepts an
+  optional `skill` name which force-activates that skill for the
+  turn (its instructions lead, it appears in `active_skill` and
+  the sources list), taking precedence over trigger matching.
+  Unknown names are ignored quietly — a stale client catalog
+  never breaks chat. This is the server half of the skills
+  catalog (SPEC-v0.41.0): clients already hold every skill's
+  name and description via the bundle; trigger-less skills —
+  the majority — are now reachable by name through
+  `get_skill_by_name`.
+- `GET /v1/skills` now requires authentication, like the bundle
+  endpoint (it previously returned the registry unauthenticated);
+  `POST /v1/skills/rescan` — which changes indexed state —
+  follows the same rule.
+
 ## 0.40.0 — 2026-10-09
 - Unified `sources` in every chat response: what the turn actually
   used, in the order gathered — the active skill, semantic-memory

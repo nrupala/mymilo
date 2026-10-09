@@ -121,7 +121,30 @@ CREATE TABLE IF NOT EXISTS skill_files (
 );
 """
 
-SCHEMA_VERSION = 5
+SCHEMA_V6 = """
+CREATE TABLE IF NOT EXISTS engine_telemetry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    route TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ok',
+    degraded_from TEXT,
+    estimate_source TEXT,
+    estimated_input INTEGER,
+    actual_prompt INTEGER,
+    actual_completion INTEGER,
+    planned_max_tokens INTEGER,
+    utilization REAL,
+    trimmed_messages INTEGER NOT NULL DEFAULT 0,
+    cache_n INTEGER,
+    prompt_n INTEGER,
+    full_history_tokens INTEGER,
+    finish_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_engine_telemetry_ts ON engine_telemetry(ts);
+CREATE INDEX IF NOT EXISTS idx_engine_telemetry_route ON engine_telemetry(route);
+"""
+
+SCHEMA_VERSION = 6
 
 
 def _now() -> str:
@@ -141,6 +164,7 @@ class Database:
             self._conn.executescript(SCHEMA_V3)
             self._conn.executescript(SCHEMA_V4)
             self._conn.executescript(SCHEMA_V5)
+            self._conn.executescript(SCHEMA_V6)
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
             cur = self._conn.execute(
@@ -488,6 +512,99 @@ class Database:
             )
             rows = cur.fetchall()
         return [dict(r) for r in rows]
+
+    # ── Token-Efficiency Engine telemetry (slice 4) ─────────────
+
+    def record_telemetry(
+        self,
+        route: str,
+        status: str = "ok",
+        degraded_from: str | None = None,
+        estimate_source: str | None = None,
+        estimated_input: int | None = None,
+        actual_prompt: int | None = None,
+        actual_completion: int | None = None,
+        planned_max_tokens: int | None = None,
+        utilization: float | None = None,
+        trimmed_messages: int = 0,
+        cache_n: int | None = None,
+        prompt_n: int | None = None,
+        full_history_tokens: int | None = None,
+        finish_reason: str | None = None,
+    ) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO engine_telemetry (ts, route, status,"
+                " degraded_from, estimate_source, estimated_input,"
+                " actual_prompt, actual_completion, planned_max_tokens,"
+                " utilization, trimmed_messages, cache_n, prompt_n,"
+                " full_history_tokens, finish_reason)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    _now(),
+                    route,
+                    status,
+                    degraded_from,
+                    estimate_source,
+                    estimated_input,
+                    actual_prompt,
+                    actual_completion,
+                    planned_max_tokens,
+                    utilization,
+                    trimmed_messages,
+                    cache_n,
+                    prompt_n,
+                    full_history_tokens,
+                    finish_reason,
+                ),
+            )
+            self._conn.commit()
+            return cur.lastrowid  # type: ignore[return-value]
+
+    def telemetry_rollup(self, since_iso: str) -> dict:
+        """Raw aggregates for the engine rollup (shaped by telemetry.py)."""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT"
+                " COALESCE(SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END), 0)"
+                " AS ok_n,"
+                " COALESCE(SUM(CASE WHEN status = 'refused_oversize'"
+                " THEN 1 ELSE 0 END), 0) AS refused_n,"
+                " COALESCE(SUM(CASE WHEN degraded_from IS NOT NULL"
+                " THEN 1 ELSE 0 END), 0) AS degraded_n,"
+                " COALESCE(SUM(actual_prompt), 0) AS prompt_sum,"
+                " COALESCE(SUM(actual_completion), 0) AS completion_sum,"
+                " COALESCE(SUM(cache_n), 0) AS cache_sum,"
+                " COALESCE(SUM(prompt_n), 0) AS promptn_sum,"
+                " COALESCE(SUM(full_history_tokens), 0) AS full_sum,"
+                " COALESCE(SUM(CASE WHEN full_history_tokens IS NOT NULL"
+                " THEN actual_prompt ELSE 0 END), 0) AS prompt_with_full_sum,"
+                " COALESCE(SUM(CASE WHEN utilization >= 0.8"
+                " THEN 1 ELSE 0 END), 0) AS over80_n"
+                " FROM engine_telemetry WHERE ts >= ?",
+                (since_iso,),
+            )
+            totals = dict(cur.fetchone())
+            cur = self._conn.execute(
+                "SELECT COUNT(*) AS n,"
+                " COALESCE(SUM(estimated_input), 0) AS est,"
+                " COALESCE(SUM(actual_prompt), 0) AS act"
+                " FROM engine_telemetry WHERE ts >= ?"
+                " AND estimate_source = 'estimate' AND actual_prompt IS NOT NULL",
+                (since_iso,),
+            )
+            bias = dict(cur.fetchone())
+            cur = self._conn.execute(
+                "SELECT route, COUNT(*) AS requests,"
+                " COALESCE(SUM(actual_prompt), 0) AS prompt_tokens,"
+                " COALESCE(SUM(cache_n), 0) AS cache_n,"
+                " COALESCE(SUM(prompt_n), 0) AS prompt_n"
+                " FROM engine_telemetry WHERE ts >= ? AND status = 'ok'"
+                " GROUP BY route ORDER BY route",
+                (since_iso,),
+            )
+            routes = [dict(r) for r in cur.fetchall()]
+        return {"totals": totals, "bias": bias, "routes": routes}
 
     def quota_flagged(self, route: str, month: str, threshold: float) -> bool:
         with self._lock:

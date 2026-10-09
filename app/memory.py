@@ -227,6 +227,17 @@ class MemoryStore:
             ).fetchone()
             return row[0] if row else 0
 
+    def session_content_chars(self, session_id: str) -> int:
+        """Total stored characters of a session's messages (engine
+        telemetry baseline: the full-history prompt size proxy)."""
+        with sqlite3.connect(self.path) as c:
+            row = c.execute(
+                "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM messages"
+                " WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+            return int(row[0]) if row else 0
+
     def get_messages_before(
         self, session_id: str, before_id: int, limit: int = 50
     ) -> list[dict]:

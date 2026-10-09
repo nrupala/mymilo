@@ -1,3 +1,9 @@
+---
+name: phased-delivery
+category: How Milo works
+blurb: Nrupal's delivery discipline — work in explicit phases, in order, never collapsed — learned from real incidents and applied to every build.
+example: Phase this migration project for me.
+---
 # Phased Delivery — Nrupal's Way of Working
 
 Established after the ra.devinfo.dev 525 incident. Work in phases, in order, explicitly. Do not skip phases and do not collapse them. We get smarter by working in phases, not by working harder — patchwork accumulates faster than we can clean it up, so it's better to do less, properly.

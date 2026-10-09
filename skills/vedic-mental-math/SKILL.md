@@ -1,3 +1,9 @@
+---
+name: vedic-mental-math
+category: Thinking & decisions
+blurb: Fast mental arithmetic from the Vedic sutras — quick calculations, estimations, and cross-checks you can do in your head.
+example: Teach me a fast way to multiply two numbers near 100.
+---
 # Vedic Mental Math
 
 A system of 16 sutras (aphorisms) and sub-sutras for fast mental arithmetic, popularized by Bharati Krishna Tirtha. Excellent for quick calculation, estimation, and cross-checking.

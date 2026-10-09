@@ -1,3 +1,9 @@
+---
+name: decision-intelligence
+category: Thinking & decisions
+blurb: Engineers the decision itself — what is actually being decided, what would change the answer, and how you will know if it worked (Cassie Kozyrkov's discipline).
+example: Help me structure a hire-or-not decision properly.
+---
 # Decision Intelligence (Cassie Kozyrkov)
 
 From Cassie Kozyrkov's discipline (former Chief Decision Scientist, Google): make decisions reliably under uncertainty by **engineering the decision process**, not by worshipping data. This is the intellectual core of PAE's decision-intelligence module and the "tool calculates, user decides" line.

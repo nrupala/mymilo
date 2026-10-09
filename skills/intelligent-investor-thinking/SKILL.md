@@ -1,3 +1,9 @@
+---
+name: intelligent-investor-thinking
+category: Money & markets
+blurb: Benjamin Graham's discipline — margin of safety, investor versus speculator, Mr. Market's moods — applied calmly to modern diversified investing.
+example: Explain margin of safety with a everyday example.
+---
 # Intelligent Investor Thinking (Benjamin Graham)
 
 Graham's discipline, applied judiciously to a modern diversified context. This is an educational framework, not personalized advice.

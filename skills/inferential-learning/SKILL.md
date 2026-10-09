@@ -1,3 +1,9 @@
+---
+name: inferential-learning
+category: Thinking & decisions
+blurb: Learns so it generalizes — extracts the transferable principle from each fact and connects it to what you already know, so knowledge compounds.
+example: Teach me options Greeks as principles I can reuse, not formulas to memorize.
+---
 # Inferential Learning
 
 Learn so it generalizes. Extract the transferable **principle**, not just the fact — and connect it to what you already know so knowledge compounds.

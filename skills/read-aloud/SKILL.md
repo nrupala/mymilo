@@ -3,6 +3,9 @@ name: read-aloud
 description: Read text aloud using the reader-core chunked speech engine.
 version: 1
 triggers: read aloud, read this to me, speak this, text to speech, read it out
+category: Writing & documents
+blurb: Prepares text to be read aloud by your phone's own voice — cleaned, chunked, and paced for listening instead of reading.
+example: Read this summary aloud, cleaned up for listening.
 ---
 # Read Aloud
 

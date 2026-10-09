@@ -3,6 +3,9 @@ name: travel-fares
 description: Lowest-cost travel booking guidance (FareSutra).
 version: 1
 triggers: cheap flight, lowest fare, travel booking, flight deal, cheapest way to fly, hotel deal
+category: Everyday life
+blurb: Finds the genuinely lowest fares with FareSutra logic — explains what drives the price on a route and where the construction savings hide.
+example: Find me the cheapest way to fly Calgary to Mumbai in December.
 ---
 # Travel Fares
 

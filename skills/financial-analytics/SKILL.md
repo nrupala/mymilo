@@ -3,6 +3,9 @@ name: financial-analytics
 description: Institutional-grade personal financial analytics (PAE).
 version: 1
 triggers: portfolio analysis, financial analytics, personal finance, net worth, asset allocation, retirement plan
+category: Money & markets
+blurb: A clear snapshot of your financial life — net worth, where money flows, liquidity, and risk — analyzed the way institutions analyze, sized for a person.
+example: Give me a net-worth and cash-flow snapshot.
 ---
 # Financial Analytics
 

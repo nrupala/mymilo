@@ -1,3 +1,9 @@
+---
+name: contact-handling-rules
+category: Security & privacy
+blurb: The standing rules for who Milo may contact, who it must never auto-reply to, and when to defer to Nrupal — applied before any message moves.
+example: Which of these messages should you never answer on your own?
+---
 # Contact Handling Rules
 
 These override default auto-inbox / auto-reply / triage / reconnection behavior. When in doubt about a specific person, defer to Nrupal.

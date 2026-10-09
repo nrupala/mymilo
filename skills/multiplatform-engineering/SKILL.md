@@ -1,3 +1,9 @@
+---
+name: multiplatform-engineering
+category: Engineering & code
+blurb: Designs one portable core with many thin surfaces — shared logic and data model, native-feeling apps on each platform.
+example: How do I share one core across Android, iOS, and web?
+---
 # Multiplatform Engineering
 
 One portable **core**, many thin surfaces. Share the logic, crypto, and data model — not the UI. Get the core right once and each platform becomes an adapter.

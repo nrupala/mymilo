@@ -3,6 +3,9 @@ name: verified-code
 description: Generate code from natural language with verification (AxiomCode).
 version: 1
 triggers: write code, write a function, implement, algorithm, prove correct, verify code, code proof
+category: Engineering & code
+blurb: Writes code from a plain-language spec and then verifies it — you get the code plus the proof it does what was asked (the AxiomCode way).
+example: Write a function that validates Canadian postal codes, and verify it.
 ---
 # Verified Code
 

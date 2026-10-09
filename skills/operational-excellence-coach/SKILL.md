@@ -1,3 +1,9 @@
+---
+name: operational-excellence-coach
+category: How Milo works
+blurb: Improves the system, not just the instance — makes work visible, removes waste, and respects the people doing it.
+example: Coach my release process: where is the waste?
+---
 # Operational Excellence Coach
 
 Improve the system, not just the instance. Optimize the whole over the part, make work visible, and remove waste relentlessly — while respecting the people doing the work. Reinforces `phased-delivery` and `weekly-accountability`.

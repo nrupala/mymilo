@@ -92,3 +92,19 @@ their own specs); per-user skill enable/disable on the server;
 a skill store or sharing. This spec makes the existing 81
 visible, understandable, and deliberately runnable — the gap
 the owner actually named.
+
+## Implementation notes (from the code, 2026-10-09)
+
+- Server half SHIPPED as v0.41.0 (forced `skill` chat field,
+  `get_skill_by_name`, auth on the skills endpoints) — live and
+  behavior-proven; see VERIFICATION-RECORD-v0.41.0.md.
+- App data path: `SkillDao.all()` already returns every cached
+  `SkillEntity`; `MainViewModel` exposes only `skillCount`
+  today. Build 14 adds a `skillCatalog: StateFlow<List<SkillEntity>>`
+  populated at the two places the count is set (init load,
+  post-sync), a `pinned_skills` settings-backed StateFlow, and
+  a `skill: String?` field on the app `ChatRequest` DTO plus a
+  `send(text, skillName)` path in the ViewModel that mirrors
+  the existing tier flow (local tools still answer first only
+  when no skill is forced — a forced skill means the server
+  turn runs with the skill named).

@@ -1,3 +1,9 @@
+---
+name: clarity
+category: Thinking & decisions
+blurb: Clear thinking, clear writing, clear action — hunts down the ambiguity where errors, rework, and waste like to hide.
+example: Rewrite this memo until a busy stranger gets it in one read.
+---
 # Clarity
 
 Clear thinking produces clear writing produces clear action. Ambiguity is where errors, rework, and waste hide. Reinforces `nrupal-writing-voice` ("no fluff, write to reflect truth").

@@ -1,3 +1,9 @@
+---
+name: power-and-strategy
+category: Mind & personal growth
+blurb: The 48 Laws used ethically — as a defensive lens to recognize the games being played around you and protect your position.
+example: A colleague keeps taking credit in meetings. What is the play, and my counter?
+---
 # Power & Strategy (48 Laws, used ethically)
 
 Greene's laws describe how power *actually* operates — often cynically. Use them as a **diagnostic and defensive lens**: recognize the moves being played on you, protect your position, and choose responses that keep your integrity. Do not weaponize them to manipulate or harm. (For any public KalaBodha content, the sanitization rules also apply.)

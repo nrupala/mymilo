@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyMilo — Guide</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #0e1116; color: #e8edf4; margin: 0; padding: 20px; }
+  .card { max-width: 720px; margin: 24px auto; background: #171c24; border-radius: 14px; padding: 26px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 30px 0 8px; color: #fff; }
+  h3 { font-size: 15px; margin: 18px 0 4px; color: #4f8cff; }
+  p, li { color: #aeb9c6; line-height: 1.55; font-size: 14.5px; }
+  .intro { color: #8b96a5; font-size: 15px; }
+  ol, ul { padding-left: 20px; margin: 6px 0; }
+  li { margin: 5px 0; }
+  .skill { border-bottom: 1px solid #232b38; padding: 10px 0; }
+  .skill .name { color: #e8edf4; font-weight: 600; font-size: 15px; }
+  .skill .blurb { color: #aeb9c6; font-size: 14px; margin-top: 2px; line-height: 1.5; }
+  .try { display: inline-block; margin-top: 6px; background: #1f2632; border: 1px solid #2c3646; border-radius: 8px; padding: 6px 10px; font-size: 13px; color: #3ddc84; }
+  .case { background: #1a212d; border: 1px solid #232b38; border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+  .case .what { color: #e8edf4; font-weight: 600; font-size: 14.5px; }
+  details { border-bottom: 1px solid #232b38; padding: 9px 0; }
+  summary { cursor: pointer; color: #e8edf4; font-size: 14.5px; font-weight: 600; }
+  details p { margin: 6px 0 2px; }
+  input.search { width: 100%; box-sizing: border-box; background: #1f2632; border: 1px solid #2c3646; border-radius: 9px; color: #e8edf4; font-size: 15px; padding: 11px 12px; margin: 10px 0 4px; }
+  a { color: #4f8cff; }
+  .btn { display: inline-block; background: #4f8cff; color: #fff; border-radius: 9px; padding: 11px 16px; font-size: 15px; font-weight: 600; text-decoration: none; margin-top: 8px; }
+  .muted { color: #8b96a5; font-size: 13px; }
+  .count { color: #8b96a5; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>👋 The MyMilo guide</h1>
+  <p class="intro">What Milo can do, how to ask, and where to look when something puzzles you. The same guide lives inside the app under <b>Help &amp; guide</b>.</p>
+
+  <h2>Quick start</h2>
+  <ol>
+    <li><b>Connect your phone.</b> On the <a href="/devices">Devices page</a>, create a token, then paste it into the app's Connect screen. (Soon: sign-in pairing — no pasting.)</li>
+    <li><b>Ask anything.</b> Type in the message box, or tap 🎤 and talk. Short or long — Milo keeps the thread.</li>
+    <li><b>Summon Milo anywhere.</b> Once you've made Milo your assistant (app drawer → Assistant), long-press Home or swipe up from a bottom corner and just speak.</li>
+    <li><b>Run a skill on purpose.</b> Open the Skills catalogue below — pick one, and tell it what to work on.</li>
+    <li><b>Check the sources.</b> Under each answer, Milo names what it used — a skill, your memory, the web, live market data. Nothing used, nothing claimed.</li>
+  </ol>
+
+  <h2>Skills catalogue</h2>
+  <p>Skills are Milo's playbooks — deep know-how it applies when you ask. Some start on their own when your words match; <b>all of them can be run on purpose</b> from the app's Skills screen. <span class="count" id="skill-count"></span></p>
+  <input class="search" id="skill-search" type="search" placeholder="Search skills…" aria-label="Search skills">
+  <div id="catalogue"><p class="muted">Loading the catalogue…</p></div>
+
+  <h2>Use cases</h2>
+  <div class="case"><div class="what">Start the day briefed</div><p>Markets, your calendar themes, what changed overnight.</p><span class="try">Try: “Brief me on the market today”</span></div>
+  <div class="case"><div class="what">Understand a stock before anyone pitches it</div><p>A full seven-step analyst pass — business, financials, valuation, risks — with sources.</p><span class="try">Try: “Analyze AAPL stock for me, step by step”</span></div>
+  <div class="case"><div class="what">See your money clearly</div><p>A household budget in plain terms, adjusted for inflation so last year compares honestly with this one.</p><span class="try">Try: “Help me with my household budget”</span></div>
+  <div class="case"><div class="what">Fly for less</div><p>Fare logic explained — what drives the price on your route, and where the real savings hide.</p><span class="try">Try: “Find me the cheapest way to fly Calgary to Mumbai in December”</span></div>
+  <div class="case"><div class="what">Write it in your voice</div><p>Emails, posts, and articles — direct, warm, economical.</p><span class="try">Try: “Write a polite email declining a meeting”</span></div>
+  <div class="case"><div class="what">Code that comes with proof</div><p>Ask for code and verification together — you get both, not just a claim.</p><span class="try">Try: “Write a function that validates Canadian postal codes, and verify it”</span></div>
+  <div class="case"><div class="what">A memory that works for you</div><p>Tell Milo facts once — preferences, dates, plans — and it uses them when they matter.</p><span class="try">Try: “Remember that my passport renews in March”</span></div>
+  <div class="case"><div class="what">Hands-free, anywhere</div><p>Summon the assistant, ask out loud, hear the answer — the whole exchange is saved in the app under “Assistant”.</p><span class="try">Try: long-press Home and ask “What is 15% of 240?”</span></div>
+
+  <h2>Questions, answered</h2>
+  <details><summary>Where do Milo's answers come from?</summary><p>From Milo's own server (Aetheris) — small, fast local models for everyday questions, stronger routes when a task needs them, plus live web search and market data when freshness matters. Every answer lists its sources.</p></details>
+  <details><summary>What works without internet?</summary><p>Calculations and unit conversions (instant, on the phone), all your saved chats, and the skills list. Questions that need the server are kept and answered when you're back — the app tells you instead of failing silently.</p></details>
+  <details><summary>What does Milo remember about me?</summary><p>Facts you share and the shape of past conversations, kept on your server — never sold, never used for ads (there are no ads). You can see and delete remembered facts from your profile.</p></details>
+  <details><summary>What exactly is a skill?</summary><p>A playbook: a body of know-how — a method, a checklist, a body of expertise — that Milo applies to your request. There are dozens, shelved by topic in the catalogue above. In the app, open Skills, tap one, and tell it what to work on.</p></details>
+  <details><summary>How do updates arrive?</summary><p>The app checks quietly and tells you in the drawer under Updates. Download, then Install — Android asks for your tap on the installer; that's the platform's rule for apps outside the Play Store, not a Milo limitation.</p></details>
+  <details><summary>Who else can use my MyMilo?</summary><p>Only accounts you allow and devices you connect. The <a href="/devices">Devices page</a> shows every connected phone — give one a fresh token or remove it there, any time.</p></details>
+  <details><summary>Is Milo the same as the AI in my other apps?</summary><p>No — Milo runs on your own server, with your data under your control, and skills built around your work. Same family of technology, very different ownership.</p></details>
+
+  <h2>About</h2>
+  <p><b>MyMilo</b> — your personal AI assistant: your server, your data, your skills.<br>
+  Owned by <b>Nrupal Akolkar</b> · Built with <b>Muse by Meta</b>.</p>
+  <p>Source code (public):
+    <a href="https://github.com/nrupala/mymilo">MyMilo server</a> ·
+    <a href="https://github.com/nrupala/mymilo-native">MyMilo Android app</a>
+  </p>
+  <p id="support-row" style="display:none"><a class="btn" id="support-btn" href="#" target="_blank" rel="noopener">❤ Support MyMilo</a></p>
+  <p class="muted">MyMilo <span id="ver">{{ version }}</span> · <a href="/">← Back to MyMilo</a></p>
+</div>
+<script>
+function human(name) {
+  return name.split('-').map(function(w) {
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }).join(' ');
+}
+function render(skills, filter) {
+  var host = document.getElementById('catalogue');
+  host.textContent = '';
+  var f = (filter || '').toLowerCase();
+  var groups = {};
+  var order = [];
+  skills.forEach(function(s) {
+    if (f && (s.name + ' ' + (s.blurb || '') + ' ' + (s.category || '')).toLowerCase().indexOf(f) === -1) return;
+    var c = s.category || 'More skills';
+    if (!groups[c]) { groups[c] = []; order.push(c); }
+    groups[c].push(s);
+  });
+  if (!order.length) {
+    var p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'No skills match your search.';
+    host.appendChild(p);
+    return;
+  }
+  order.forEach(function(c) {
+    var h = document.createElement('h3');
+    h.textContent = c + ' · ' + groups[c].length;
+    host.appendChild(h);
+    groups[c].forEach(function(s) {
+      var div = document.createElement('div');
+      div.className = 'skill';
+      var name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = human(s.name);
+      div.appendChild(name);
+      var blurb = document.createElement('div');
+      blurb.className = 'blurb';
+      blurb.textContent = s.blurb || s.description || '';
+      div.appendChild(blurb);
+      if (s.example) {
+        var tryEl = document.createElement('span');
+        tryEl.className = 'try';
+        tryEl.textContent = 'Try: “' + s.example + '”';
+        div.appendChild(tryEl);
+      }
+      host.appendChild(div);
+    });
+  });
+}
+var ALL = [];
+fetch('/v1/skills/bundle')
+  .then(function(r) { return r.json(); })
+  .then(function(b) {
+    ALL = b.skills || [];
+    document.getElementById('skill-count').textContent =
+      ALL.length + ' skills.';
+    render(ALL, '');
+  })
+  .catch(function() {
+    document.getElementById('catalogue').textContent =
+      'The catalogue could not be loaded — sign in and try again.';
+  });
+document.getElementById('skill-search').addEventListener('input', function(e) {
+  render(ALL, e.target.value);
+});
+fetch('/v1/client/config')
+  .then(function(r) { return r.json(); })
+  .then(function(c) {
+    if (c.support_url) {
+      document.getElementById('support-btn').href = c.support_url;
+      document.getElementById('support-row').style.display = 'block';
+    }
+  })
+  .catch(function() {});
+</script>
+</body>
+</html>

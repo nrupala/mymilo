@@ -3,6 +3,9 @@ name: article-draft
 description: Draft IEEE-structured technical articles (onsmartgrid pipeline).
 version: 1
 triggers: write article, blog post, draft post, write a post, article about
+category: Writing & documents
+blurb: Drafts technical articles in the onsmartgrid format — IEEE-ready structure, abstract to references — that double as papers and authority builders.
+example: Draft an article on VFD migration planning, IEEE structure.
 ---
 # Article Drafting
 

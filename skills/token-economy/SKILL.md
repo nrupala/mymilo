@@ -1,6 +1,9 @@
 ---
 name: token-economy
 description: Milo's in-session operating discipline for maximizing useful work per token and preventing context/credit drain — the compaction-and-context-preservation practice OpenCode/Codex/Claude Code use, adapted to Town's tools. Use this WHENEVER a task involves reading large data (emails, files, session history, transcripts, web pages, MCP payloads), multi-step work, fan-out, or anything that could balloon context — before deciding what to read, what to load, whether to delegate, and how much to write back. It governs retrieval discipline, tool-loading discipline, externalized scratchpad/compaction, delegation routing, and output economy. Pairs with thread-checkpoint (WHEN to cut a thread) and finish-discipline (closing work); this one is the moment-to-moment throughput layer that runs on almost every non-trivial task.
+category: How Milo works
+blurb: Milo's discipline for getting the most useful work per token — what to read, what to delegate, and when to compact, so big tasks stay affordable.
+example: How do you keep a huge research task from ballooning in cost?
 ---
 
 # Token Economy — maximize useful work per token

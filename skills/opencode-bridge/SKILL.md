@@ -3,6 +3,9 @@ name: opencode-bridge
 description: Dispatch coding tasks to OpenCode on the Aetheris box via the oc-bridge. Milo as foreman — frame the task, dispatch, monitor, report back.
 version: 1
 triggers: fix this bug, opencode, dispatch to opencode, code task, implement this, debug this, refactor this, opencode bridge
+category: Engineering & code
+blurb: Dispatches real coding tasks to OpenCode running on the Aetheris server — Milo frames the job, the bridge does the work, and you get a report back.
+example: Fix this bug in my project and report what changed.
 ---
 # OpenCode Bridge — Milo as Foreman
 

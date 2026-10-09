@@ -1,3 +1,9 @@
+---
+name: cloud-sovereign-infra
+category: How Milo works
+blurb: The sovereign-infrastructure doctrine — own the compute and the data, minimize lock-in, expose nothing you do not have to.
+example: Explain the sovereign-cloud approach in plain words.
+---
 # Cloud & Sovereign Infrastructure
 
 Own the compute and the data; minimize lock-in; expose nothing you don't have to. The platform is **Aetheris** — Nrupal's sovereign, self-hosted cloud. Pairs with `security-zero-knowledge`, `systems-builder`, `phased-delivery`, and `aetheris-mgmt-api`.

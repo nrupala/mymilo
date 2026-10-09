@@ -1,3 +1,9 @@
+---
+name: organized-mind-levitin
+category: Mind & personal growth
+blurb: Levitin's Organized Mind — offload remembering onto systems and your environment so your brain is free for thinking.
+example: Redesign my desk and phone setup so I stop losing things.
+---
 # The Organized Mind (Daniel J. Levitin)
 
 Organized people aren't better at remembering — they **offload** remembering onto the external world so the brain is free to think.

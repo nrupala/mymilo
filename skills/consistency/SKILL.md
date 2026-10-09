@@ -1,3 +1,9 @@
+---
+name: consistency
+category: Thinking & decisions
+blurb: Systems beat motivation — designs the small, reliable, repeatable actions that compound into results and trust.
+example: Design a weekly routine I can actually keep for learning statistics.
+---
 # Consistency
 
 Compounding comes from repeated reliable action; trust comes from predictable behavior. Systems beat motivation.

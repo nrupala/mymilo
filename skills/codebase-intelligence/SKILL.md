@@ -3,6 +3,9 @@ name: codebase-intelligence
 description: Index once, query as data — how to answer structural codebase questions from a code graph. Deterministic intent routing, aggregate-first output, domain-blind analysis.
 version: 1
 triggers: codebase, code graph, who calls, what calls, dependencies, blast radius, impact analysis, callers, callees, code structure, architecture map, find usages, trace, code navigation, repo map, symbols
+category: Engineering & code
+blurb: Answers structural questions about code from an index — who calls this, what breaks if I change that — without re-reading the whole repo each time.
+example: What calls the payment module, and what depends on it?
 ---
 # Codebase Intelligence — Index Once, Query as Data
 

@@ -1,3 +1,9 @@
+---
+name: creative-ideation
+category: Mind & personal growth
+blurb: Creativity as a practice, not a lightning strike — showing up prepared, drawing from the well, and developing raw ideas into usable ones.
+example: I need ten fresh angles for a workshop title — then help me pick.
+---
 # Creative Ideation
 
 Creativity is a **practice, not a lightning strike**. Bryan Collins's image: "creativity is like carrying a bucket to the river" — you must show up prepared and do the work to draw from the well. Inspiration favors those already at the desk.

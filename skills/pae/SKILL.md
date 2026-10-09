@@ -3,6 +3,9 @@ name: pae
 description: Institutional-grade personal financial analytics — what to track, how to benchmark, how to separate signal from noise. Risk metrics, factor decomposition, stress tests, decision journaling. Tool calculates, user decides.
 version: 1
 triggers: portfolio, portfolio analysis, risk, VaR, Sharpe, Sortino, drawdown, volatility, beta, correlation, Monte Carlo, stress test, factor model, Fama-French, allocation, asset allocation, performance attribution, decision journal, carry, leverage
+category: Money & markets
+blurb: Runs the Personal Analytics Engine method on your portfolio — risk, diversification, and stress tests with real metrics like Sharpe and drawdown. The numbers inform; you decide.
+example: Run a risk check on my portfolio.
 ---
 # PAE — Personal Analytics Engine
 

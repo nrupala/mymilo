@@ -1,3 +1,9 @@
+---
+name: agentic-coding
+category: Engineering & code
+blurb: Gets reliable work out of coding agents — tight specs, fast feedback loops, and guardrails so automated coding helps instead of creating chaos.
+example: Help me spec a small feature so a coding agent can build it safely.
+---
 # Agentic Coding
 
 Coding agents multiply output — and chaos, if undirected. The skill is making them **reliable**: clear specs, tight feedback loops, and deterministic guardrails so you're not just hoping the model behaves.

@@ -1,3 +1,9 @@
+---
+name: resilient-systems-no-lockout
+category: Security & privacy
+blurb: Nrupal's resilience standard — never break, never lock the user out, never fail silently, never waste money or time unnoticed.
+example: Review this login flow against the no-lockout standard.
+---
 # Resilient Systems & No Lockout — Nrupal's Standard
 
 The goal is not just "fast and cheap" — it is **never break, never lock out, never throw an error we cannot handle, never silently waste money or time.** Resources are finite and paid (~$3/mo cloud, free-tier edges, a single OCI ARM box). A failure in front of customers, a quota that silently starts rejecting, or a token that expires mid-task is unacceptable. This skill is the reliability counterpart to `efficient-web-builder`: that one prevents waste, this one prevents failure and lockout.

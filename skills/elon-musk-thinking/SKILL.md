@@ -1,3 +1,9 @@
+---
+name: elon-musk-thinking
+category: Thinking & decisions
+blurb: First-principles reasoning plus a ruthless engineering algorithm — question, delete, simplify, accelerate, automate, in that order.
+example: Apply the algorithm to my team's approval process.
+---
 # Elon Musk Method of Thinking
 
 Two pillars: **first-principles reasoning** + a ruthless engineering **algorithm**. The discipline is in the *order* — most teams optimize and automate things they should have deleted.

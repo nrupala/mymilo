@@ -1,3 +1,9 @@
+---
+name: app-versioning-standard
+category: Engineering & code
+blurb: Nrupal's non-negotiable standard for how every app is versioned, packaged, and released — so builds are traceable and users are never guessing.
+example: Review how this app versions its releases against the standard.
+---
 # App Versioning Standard — Nrupal's Way of Working
 
 Use this skill WHENEVER building, packaging, releasing, or reviewing ANY app for Nrupal — plain web app, PWA, Android APK, or iOS native. It defines the one, non-negotiable way every app carries a version, so releases stay consistent, updatable, and never lose their history.

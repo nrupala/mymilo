@@ -1,3 +1,9 @@
+---
+name: kritvega-architecture
+category: How Milo works
+blurb: The architecture and vocabulary of Kritvega — Python-first, standard-library-only, and the current state of that build.
+example: What is Kritvega, and what are its build rules?
+---
 # Kritvega — architecture, vocabulary, and build state
 
 Use this WHENEVER doing any Kritvega work — code, specs, PRs, roadmap — or answering what Kritvega is. Repo: `github.com/nrupala/kritvega` (private). Python-first, **stdlib-only core, no Docker**, ruff + pytest, branch → PR → green CI.

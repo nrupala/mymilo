@@ -3,6 +3,9 @@ name: code-graph
 description: Analyze codebases the way an agent sees them (codetopo).
 version: 1
 triggers: analyze codebase, code structure, dependencies, architecture, code review, how does this code work
+category: Engineering & code
+blurb: Analyzes a codebase as a graph — entry points, how data flows, where complexity concentrates — instead of a pile of files (the codetopo view).
+example: Analyze this codebase structure and find the hot spots.
 ---
 # Code Graph
 

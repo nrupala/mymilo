@@ -1,3 +1,9 @@
+---
+name: pae-architecture
+category: How Milo works
+blurb: The canonical blueprint of the Personal Analytics Engine — its modules, zero-knowledge design, and how the flagship is put together.
+example: Walk me through the PAE architecture, module by module.
+---
 # PAE — Personal Analytics Engine (Canonical Reference)
 
 PAE is Nrupal's flagship investment product: institutional-grade financial analytics for individuals, zero-knowledge encryption, 11 Aladdin-parity modules. Repo: `nrupala/pae` (AGPL-3.0). It fits as **Segment 6** in the ZKPC stealth product portfolio.

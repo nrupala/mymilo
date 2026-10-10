@@ -5,6 +5,8 @@ version: 1
 triggers: budget, household budget, inflation, expenses, spending, cost of living, save money
 category: Money & markets
 blurb: Builds a household budget in seven steps and shows it in inflation-real terms, so you see what your spending is actually doing year over year.
+archetype: engine
+layout: {"steps":["Income picture","Spending map","Inflation-real view","Gaps","Scenarios","Levers","Plan"],"inputs":[{"key":"income_rows","label":"Income sources","type":"rows","fields":["source","monthly take-home"]},{"key":"spending_rows","label":"Spending by category","type":"rows","fields":["category","monthly"]},{"key":"priority","label":"What matters most right now","type":"choice","options":["Pay down debt","Build savings","Breathing room","Other"]}],"artifact":"document"}
 example: Help me with my household budget.
 ---
 # Budget Engine

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.43.0 — 2026-10-09
+- Skill Pair Program, server half: the skills bundle now
+  carries each skill's pair data — `archetype` (which layout
+  frame renders its workspace in the app) and `layout` (its
+  steps, inputs, and artifact kind, as one JSON object).
+  Frontmatter-authored in SKILL.md; skills without pair data
+  default to the Knowledge frame with an empty layout, and a
+  malformed layout degrades to empty rather than breaking
+  the bundle. First three pairs authored: Budget Engine
+  (engine), Stock Analysis (analyst), Electrical Code
+  (reference & proof).
+- `docs/BUILD-GUARDRAILS.md`: the canonical build-guardrail
+  set — flow, gates, verification honesty, authority, and
+  design rules, including the thirteen items adopted from
+  the owner's OpenCode standing rules the same day.
+
 ## 0.42.0 — 2026-10-09
 - The skills catalogue has content now: every one of the 81
   skills carries a `category`, a plain-language `blurb` (what it

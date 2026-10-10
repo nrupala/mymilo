@@ -5,6 +5,8 @@ version: 1
 triggers: electrical code, CEC, section 18, hazardous location, classified area, wiring method, ampacity, grounding, bonding
 category: Electrical & energy
 blurb: Answers Canadian Electrical Code Section 18 questions — hazardous locations, classifications — with the reasoning and proof trace shown, SAIC-style.
+archetype: reference
+layout: {"blocks":["Answer","Why","Proof","Limits"],"inputs":[{"key":"question","label":"Your Section 18 question","type":"text","required":true}],"artifact":"none"}
 example: What does CEC Section 18 say about Class I locations?
 ---
 # Electrical Code Q&A

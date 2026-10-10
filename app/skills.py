@@ -112,6 +112,33 @@ def _remove_skill(db: Any, docs: Any, row: dict[str, Any]) -> None:
     db.delete_skill_file(row["name"])
 
 
+def _pair_fields(meta: dict) -> dict:
+    """Skill Pair Program: the data that pairs a skill with its
+    groomed interactive layout (archetype frame + layout block).
+
+    Frontmatter-authored (``archetype:`` + a one-line JSON
+    ``layout:``). Defaults keep unpaired skills usable: the
+    Knowledge frame and an empty layout, so the fleet adopts
+    pairs incrementally and nothing breaks on a missing block.
+    A malformed layout degrades to {} — never an exception.
+    """
+    import json as _json
+
+    layout: dict = {}
+    raw_layout = meta.get("layout", "")
+    if raw_layout:
+        try:
+            parsed = _json.loads(raw_layout)
+            if isinstance(parsed, dict):
+                layout = parsed
+        except ValueError:
+            layout = {}
+    return {
+        "archetype": meta.get("archetype", "") or "knowledge",
+        "layout": layout,
+    }
+
+
 def resolve_skills_dir(configured: str | Path, base_dir: str | Path) -> Path:
     p = Path(configured)
     return p if p.is_absolute() else Path(base_dir) / p
@@ -154,6 +181,7 @@ def refresh_skill_cache(skills_dir: str | Path) -> int:
                         "category": meta.get("category", "More skills"),
                         "blurb": meta.get("blurb", meta.get("description", "")),
                         "example": meta.get("example", ""),
+                        **_pair_fields(meta),
                     }
                 )
     _skill_cache = cache
@@ -202,6 +230,7 @@ def get_skill_bundle() -> dict:
                     "category": meta.get("category", "More skills"),
                     "blurb": meta.get("blurb", meta.get("description", "")),
                     "example": meta.get("example", ""),
+                    **_pair_fields(meta),
                 }
             )
     else:
@@ -215,6 +244,8 @@ def get_skill_bundle() -> dict:
                 "category": s.get("category", "More skills"),
                 "blurb": s.get("blurb", s["description"]),
                 "example": s.get("example", ""),
+                "archetype": s.get("archetype", "knowledge"),
+                "layout": s.get("layout", {}),
             }
             for s in _skill_cache
         ]

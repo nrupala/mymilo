@@ -5,6 +5,8 @@ version: 1
 triggers: stock, ticker, shares, equity, valuation, P/E, price target, earnings, dividend, portfolio stock, forecast, AAPL, TSLA, NVDA, MSFT, GOOGL, META, AMZN, AAPL, google, meta, amazon, apple, microsoft, tesla, nvidia
 category: Money & markets
 blurb: Researches a stock the way an institutional analyst would — business, financials, valuation, and risks in a fixed seven-step method. Education only, never a buy or sell call.
+archetype: analyst
+layout: {"steps":["Fundamentals","Technicals","Macro context","Competitor dynamics","Valuation","Risk mapping","Report"],"inputs":[{"key":"ticker","label":"Ticker (add .to for TSX)","type":"text","required":true}],"artifact":"brief"}
 example: Analyze AAPL stock for me, step by step.
 ---
 # Stock Analysis

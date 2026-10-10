@@ -239,6 +239,7 @@ embedding model, e.g. `llama-server -m nomic-embed-text.gguf --embedding
 | `MYMILO_SUPPORT_URL` | Support-button destination served to clients (empty hides it) |
 | `MYMILO_CLOUD_API_KEY` | Cloud model key (e.g. OpenRouter) |
 | `GITHUB_TOKEN` | GitHub integration token |
+| `CONDUIT_API_KEY` | Conduit MCP connector key (`cndt_…`; free tier 100 calls/day) |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare integration token |
 
 API keys come from the environment only — never from the config file,
@@ -249,7 +250,7 @@ never from the repo. See `vault/README.md`.
 ```
 app/           FastAPI: main, config, router, schemas, db, jobs, memory,
                semantic, context_builder, skills, mcp_server, integrations
-mcp/           MCP tool catalog JSON (19 core + github + gmail/calendar + cf)
+mcp/           MCP tool catalog JSON (19 core + github + gmail/calendar + cf + conduit)
 skills/        81 drop-a-file skills (SKILL.md each, catalogued)
 templates/     Jinja2 UI (chat, devices, jobs, costs, documents, guide)
 static/        local stylesheet, zero external deps

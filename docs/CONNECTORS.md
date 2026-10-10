@@ -14,6 +14,7 @@ the task ends, and nothing read for a task is retained.
 | Live market data | The market brief behind `stock-analysis` | Fires only when the skill is active and a brief is asked for |
 | GitHub | Repo work — reads, issues, pull requests | Via scoped tokens, server-side |
 | oc-bridge (MCP) | Dispatches coding tasks to OpenCode on Aetheris; Milo acts as foreman | `https://oc.aimlds.org/mcp` behind Cloudflare Access; see [HUMAN-MACHINE-AGENT.md](HUMAN-MACHINE-AGENT.md) |
+| Conduit (MCP) | SEC EDGAR filings & fundamentals as 24 upstream tools (`conduit_*`) | Conduit's hosted connector on Cloudflare Workers; `CONDUIT_API_KEY` (metered, free tier 100 calls/day) |
 | MCP server | MyMilo itself exposes an MCP surface so other agents can call it | `app/mcp_server.py` |
 | Device API | The Android app: chat, sync, skills bundle, client config | Device-token auth — see [OPERATIONS.md](OPERATIONS.md#devices) |
 

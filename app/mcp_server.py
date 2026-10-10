@@ -89,6 +89,17 @@ def load_catalog(mcp_dir: Path) -> dict:
         except Exception:
             pass
 
+    # Add Conduit tools (v0.44.0): upstream MCP connector (SEC EDGAR)
+    conduit_tools_path = mcp_dir / "conduit-tools.json"
+    if conduit_tools_path.exists():
+        try:
+            conduit_tools = json.loads(conduit_tools_path.read_text())
+            if isinstance(conduit_tools, dict):
+                conduit_tools = conduit_tools.get("tools", [])
+            tools.extend(conduit_tools)
+        except Exception:
+            pass
+
     return {"tools": tools}
 
 
@@ -506,6 +517,57 @@ async def _opencode_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
         }
 
 
+async def _conduit_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Execute Conduit tools (v0.44.0): upstream MCP dispatch.
+
+    Conduit is itself an MCP server (SEC EDGAR Filings & Fundamentals,
+    24 tools). Milo forwards the call and returns Conduit's result
+    verbatim — no local re-implementation of EDGAR. Free keys meter
+    100 calls/day upstream; quota exhaustion surfaces as a clean
+    isError with the server's counters, never an exception.
+    """
+    from .integrations.conduit import TOOL_NAME_MAP, ConduitClient, ConduitQuotaError
+
+    upstream = TOOL_NAME_MAP.get(tool_name)
+    if upstream is None:
+        return {
+            "content": [{"type": "text", "text": f"Unknown Conduit tool: {tool_name}"}],
+            "isError": True,
+        }
+
+    try:
+        client = ConduitClient()
+    except ValueError:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Conduit not configured (CONDUIT_API_KEY missing)",
+                }
+            ],
+            "isError": True,
+        }
+
+    try:
+        result = await client.call_tool(upstream, args)
+        text = (
+            json.dumps(result, indent=2)
+            if isinstance(result, (dict, list))
+            else str(result)
+        )
+        return {"content": [{"type": "text", "text": text}]}
+    except ConduitQuotaError as e:
+        return {
+            "content": [{"type": "text", "text": str(e)}],
+            "isError": True,
+        }
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": f"Conduit error: {e}"}],
+            "isError": True,
+        }
+
+
 async def _escalate(
     params: dict[str, Any], get_app_state, caller: str
 ) -> dict[str, Any]:
@@ -577,6 +639,10 @@ async def _call_tool(
     # ── OpenCode bridge (v0.27.0: Milo as foreman) ────────────
     if tool_name.startswith("opencode_"):
         return await _opencode_tool(tool_name, args)
+
+    # ── Conduit (v0.44.0: upstream MCP connector, SEC EDGAR) ──
+    if tool_name.startswith("conduit_"):
+        return await _conduit_tool(tool_name, args)
 
     # For Phase 1, support the core tools via direct function calls.
     # Full HTTP mapping comes in Phase 1b.

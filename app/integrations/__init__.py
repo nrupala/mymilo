@@ -1,3 +1,3 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (c) 2026 Nrupal Akolkar
-"""Integrations: GitHub, Gmail, Calendar, Cloudflare."""
+"""Integrations: GitHub, Gmail, Calendar, Cloudflare, OpenCode bridge, Conduit."""

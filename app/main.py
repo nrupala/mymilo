@@ -1535,6 +1535,16 @@ def create_app(
                     catalog["tools"] = catalog.get("tools", []) + cf_tools
                 except (OSError, json.JSONDecodeError):
                     pass
+            # Merge Conduit tools (v0.44.0: upstream MCP connector)
+            conduit_path = mcp_catalog_path.parent / "conduit-tools.json"
+            if conduit_path.exists():
+                try:
+                    conduit_tools = json.loads(conduit_path.read_text())
+                    if isinstance(conduit_tools, dict):
+                        conduit_tools = conduit_tools.get("tools", [])
+                    catalog["tools"] = catalog.get("tools", []) + conduit_tools
+                except (OSError, json.JSONDecodeError):
+                    pass
             return catalog
         except (OSError, json.JSONDecodeError) as exc:
             raise HTTPException(

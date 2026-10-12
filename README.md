@@ -11,7 +11,7 @@ Gmail/Calendar/Cloudflare/GitHub integrations.
 Local-first, on his own hardware, multi-user (Nrupal + Natasha),
 no credits. Named "milo" between Nrupal and Wright.
 
-> Owned by Nrupal Akolkar · Built with Muse by Meta
+> Owned by [Nrupal Akolkar](https://nrupalakolkar.com) · Built with [Muse by Meta](https://muse.ai/join) — join Muse, then redeem code **101EEK** in Settings within 48 hours of joining and we both earn tokens.
 
 **License:** AGPL-3.0-or-later — see [LICENSE](LICENSE), [NOTICE](NOTICE),
 and [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md) for the commercial

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.45.0 — 2026-10-12
+- The OpenClaw skills library joins MyMilo: 119 skills from
+  the owner's own `openclaw-skills` library (authored by him
+  prompt-by-prompt in AnyClaw, executed by Jack; Apache-2.0)
+  are granted to Milo, taking the catalogue from 81 to 200.
+  Bodies verbatim; frontmatter adapted to the house schema
+  (triggers, category, blurb, example; archetype Knowledge
+  until pair data is authored). Three source skills held
+  out by the import screen (template/script-execution and
+  meta suites whose procedures belong to the source repo's
+  own machinery): multi-surface-webapp, secure-build-pattern,
+  skill-ops. Six topical near-duplicate pairs with existing
+  skills are kept on both sides, named in the import ledger.
+
 ## 0.44.0 — 2026-10-10
 - Conduit integration: Milo can now call Conduit (the MCP
   connector marketplace) as an upstream tool source. New

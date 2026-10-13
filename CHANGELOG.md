@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.46.0 — 2026-10-12
+- Support row carries both links (owner decision 2026-10-12):
+  client config now returns `support_links` — primary
+  Buy Me a Coffee and second PayPal, each set by server
+  environment (MYMILO_SUPPORT_URL / MYMILO_SUPPORT_URL_2,
+  labels overridable) — and `support_url` keeps mirroring
+  the primary for older clients. The guide page renders one
+  button per link under "Support MyMilo". Production env
+  sets both: buymeacoffee.com/nrupalakolt (primary) and
+  paypal.me/nrupalakolkar. The GitHub Sponsors page remains
+  live but is no longer the button's destination.
+
 ## 0.45.0 — 2026-10-12
 - The OpenClaw skills library joins MyMilo: 119 skills from
   the owner's own `openclaw-skills` library (authored by him

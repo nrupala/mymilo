@@ -608,6 +608,21 @@ def create_app(
 
         from app.skills import get_skill_bundle
 
+        # v0.46.0: the Support row can carry more than one link.
+        # Primary + optional second, each set in the server
+        # environment (labels default to the plain-words names);
+        # support_url stays as the primary for older clients, and
+        # an empty list hides the row everywhere.
+        support_links = []
+        for url_env, label_env, default_label in (
+            ("MYMILO_SUPPORT_URL", "MYMILO_SUPPORT_LABEL", "Buy Me a Coffee"),
+            ("MYMILO_SUPPORT_URL_2", "MYMILO_SUPPORT_LABEL_2", "PayPal"),
+        ):
+            url = os.environ.get(url_env, "")
+            if url:
+                label = os.environ.get(label_env, "") or default_label
+                support_links.append({"label": label, "url": url})
+
         return {
             "version": __version__,
             "sync_interval_seconds": 300,
@@ -615,11 +630,8 @@ def create_app(
             "complexity_threshold_chars": 500,
             "skills_bundle_version": __version__,
             "skills_bundle_hash": get_skill_bundle()["hash"],
-            # v0.42.0: where the app's Support button points. Set
-            # MYMILO_SUPPORT_URL in the server environment; empty
-            # hides the button everywhere. No app release needed
-            # to change it.
-            "support_url": os.environ.get("MYMILO_SUPPORT_URL", ""),
+            "support_url": support_links[0]["url"] if support_links else "",
+            "support_links": support_links,
             "features": {
                 "streaming": False,
                 "offline_queue": True,
@@ -1533,16 +1545,6 @@ def create_app(
                     if isinstance(cf_tools, dict):
                         cf_tools = cf_tools.get("tools", [])
                     catalog["tools"] = catalog.get("tools", []) + cf_tools
-                except (OSError, json.JSONDecodeError):
-                    pass
-            # Merge Conduit tools (v0.44.0: upstream MCP connector)
-            conduit_path = mcp_catalog_path.parent / "conduit-tools.json"
-            if conduit_path.exists():
-                try:
-                    conduit_tools = json.loads(conduit_path.read_text())
-                    if isinstance(conduit_tools, dict):
-                        conduit_tools = conduit_tools.get("tools", [])
-                    catalog["tools"] = catalog.get("tools", []) + conduit_tools
                 except (OSError, json.JSONDecodeError):
                     pass
             return catalog

@@ -75,7 +75,7 @@
     <a href="https://github.com/nrupala/mymilo">MyMilo server</a> ·
     <a href="https://github.com/nrupala/mymilo-native">MyMilo Android app</a>
   </p>
-  <p id="support-row" style="display:none"><a class="btn" id="support-btn" href="#" target="_blank" rel="noopener">❤ Support MyMilo</a></p>
+  <p id="support-row" style="display:none"><b>Support MyMilo:</b> <span id="support-links"></span></p>
   <p class="muted">MyMilo <span id="ver">{{ version }}</span> · <a href="/">← Back to MyMilo</a></p>
 </div>
 <script>
@@ -147,10 +147,22 @@ document.getElementById('skill-search').addEventListener('input', function(e) {
 fetch('/v1/client/config')
   .then(function(r) { return r.json(); })
   .then(function(c) {
-    if (c.support_url) {
-      document.getElementById('support-btn').href = c.support_url;
-      document.getElementById('support-row').style.display = 'block';
-    }
+    var links = c.support_links && c.support_links.length
+      ? c.support_links
+      : (c.support_url ? [{label: 'Support MyMilo', url: c.support_url}] : []);
+    if (!links.length) { return; }
+    var host = document.getElementById('support-links');
+    links.forEach(function(l, i) {
+      if (i) { host.appendChild(document.createTextNode(' · ')); }
+      var a = document.createElement('a');
+      a.className = 'btn';
+      a.href = l.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = l.label;
+      host.appendChild(a);
+    });
+    document.getElementById('support-row').style.display = 'block';
   })
   .catch(function() {});
 </script>

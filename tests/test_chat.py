@@ -113,9 +113,39 @@ def test_client_config_support_url(client, monkeypatch):
     """v0.42.0: the Support button's destination is server-set,
     so it can change without an app release; empty hides it."""
     monkeypatch.delenv("MYMILO_SUPPORT_URL", raising=False)
+    monkeypatch.delenv("MYMILO_SUPPORT_URL_2", raising=False)
     r = client.get("/v1/client/config")
     assert r.status_code == 200
     assert r.json()["support_url"] == ""
+    assert r.json()["support_links"] == []
     monkeypatch.setenv("MYMILO_SUPPORT_URL", "https://example.org/support")
     r = client.get("/v1/client/config")
     assert r.json()["support_url"] == "https://example.org/support"
+
+
+def test_client_config_support_links(client, monkeypatch):
+    """v0.46.0: the Support row carries primary + optional second
+    link (owner's decision 2026-10-12: Buy Me a Coffee primary,
+    PayPal second), each server-set; support_url mirrors primary."""
+    for var in (
+        "MYMILO_SUPPORT_URL",
+        "MYMILO_SUPPORT_URL_2",
+        "MYMILO_SUPPORT_LABEL",
+        "MYMILO_SUPPORT_LABEL_2",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("MYMILO_SUPPORT_URL", "https://buymeacoffee.com/example")
+    r = client.get("/v1/client/config")
+    assert r.json()["support_links"] == [
+        {"label": "Buy Me a Coffee", "url": "https://buymeacoffee.com/example"}
+    ]
+    monkeypatch.setenv("MYMILO_SUPPORT_URL_2", "https://paypal.me/example")
+    r = client.get("/v1/client/config")
+    assert r.json()["support_links"] == [
+        {"label": "Buy Me a Coffee", "url": "https://buymeacoffee.com/example"},
+        {"label": "PayPal", "url": "https://paypal.me/example"},
+    ]
+    assert r.json()["support_url"] == "https://buymeacoffee.com/example"
+    monkeypatch.setenv("MYMILO_SUPPORT_LABEL_2", "PayPal (personal)")
+    r = client.get("/v1/client/config")
+    assert r.json()["support_links"][1]["label"] == "PayPal (personal)"

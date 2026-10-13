@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.44.0 — 2026-10-12
+## 0.45.0 — 2026-10-12
 - The OpenClaw skills library joins MyMilo: 119 skills from
   the owner's own `openclaw-skills` library (authored by him
   prompt-by-prompt in AnyClaw, executed by Jack; Apache-2.0)
@@ -13,6 +13,21 @@
   own machinery): multi-surface-webapp, secure-build-pattern,
   skill-ops. Six topical near-duplicate pairs with existing
   skills are kept on both sides, named in the import ledger.
+
+## 0.44.0 — 2026-10-10
+- Conduit integration: Milo can now call Conduit (the MCP
+  connector marketplace) as an upstream tool source. New
+  `app/integrations/conduit.py` is a stateless JSON-RPC client
+  for Conduit's Filings & Fundamentals connector — 24 SEC EDGAR
+  tools (`conduit_*` in `mcp/conduit-tools.json`, schemas taken
+  verbatim from Conduit's own TOOL_DEFS) dispatched through
+  `app/mcp_server.py` exactly like the oc-bridge tools. Auth is
+  `CONDUIT_API_KEY` in the environment, sent as a Bearer header;
+  unconfigured fails closed with a clear "not configured" error.
+  Conduit's quota responses (HTTP 429, daily free window of 100
+  calls) surface as typed errors carrying the server's counters —
+  never a crash or a silent drop. Key provisioning on Aetheris
+  is an operator step; no real key is in the repo.
 
 ## 0.43.0 — 2026-10-09
 - Skill Pair Program, server half: the skills bundle now

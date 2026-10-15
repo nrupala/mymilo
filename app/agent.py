@@ -31,8 +31,10 @@ Honesty rules, enforced here rather than promised:
 - An unconfigured integration (no OC_BRIDGE_TOKEN, no
   CONDUIT_API_KEY) fails its step with a plain "not configured"
   error. Nothing is faked or silently skipped.
-- The caller can cancel cooperatively: the executor checks the
-  job row before every step and stops if cancellation was asked.
+- The caller can cancel: the executor checks the job row
+  before every step and watches it while a step runs (polled
+  every ~2s), interrupting the in-flight step so a stop lands
+  promptly rather than at the next step boundary.
 
 Planning: the model is asked for a JSON plan restricted to the
 registry (the model proposes; the registry decides what may run —
@@ -65,6 +67,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 TERMINAL_STATES = ("completed", "failed", "stopped")
 MAX_SUMMARY_CHARS = 4000
 MAX_CONTEXT_CHARS = 2000
+
+# How often a running step re-checks the job's cancel flag.
+# Small enough that "stop" means stop (a step may run up to the
+# 300s step timeout); large enough that re-reading the job row
+# stays negligible next to the step itself. Tests monkeypatch
+# this down; production keeps the ~2s default.
+CANCEL_POLL_INTERVAL_S = 2.0
 
 # Registry vocabulary: tool -> allowed actions. For oc_bridge the
 # actions are the bridge's tool names; for conduit they are the
@@ -474,6 +483,62 @@ async def _run_conduit_step(step: dict[str, Any], deps: dict[str, Any]) -> StepO
 # ----------------------------------------------------------------------
 # Executor (registered through the jobs engine as agent_task)
 # ----------------------------------------------------------------------
+class _StepCancelled(Exception):
+    """The cancel flag interrupted a step mid-run (internal)."""
+
+
+async def _stop_step(step_task: asyncio.Task) -> None:
+    """Cancel a step task and wait for it to finish stopping.
+
+    The step's own outcome (result, error, or its cancellation)
+    is irrelevant here — the caller has already decided what
+    the interruption means. A cancellation aimed at THIS task
+    (executor shutdown) is never swallowed.
+    """
+    step_task.cancel()
+    try:
+        await step_task
+    except asyncio.CancelledError:
+        current = asyncio.current_task()
+        if current is not None and current.cancelling():
+            raise
+    except Exception:  # noqa: BLE001 — the interruption already decided
+        pass
+
+
+async def _await_step(
+    step_coro: Any, *, state: _TaskState, timeout_s: float
+) -> StepOutcome:
+    """Run one step under its timeout, watching the cancel flag.
+
+    Behaves like ``asyncio.wait_for`` — returns the step's
+    result, propagates its genuine exception, raises
+    TimeoutError at the deadline — except that a cancel
+    requested while the step runs interrupts it promptly
+    (within one poll interval) and raises _StepCancelled
+    instead, so the executor records an honest stop rather
+    than letting "stop" wait out the step timeout.
+    """
+    step_task = asyncio.ensure_future(step_coro)
+    deadline = time.monotonic() + timeout_s
+    try:
+        while not step_task.done():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                await _stop_step(step_task)
+                raise TimeoutError from None
+            await asyncio.wait(
+                {step_task}, timeout=min(CANCEL_POLL_INTERVAL_S, remaining)
+            )
+            if not step_task.done() and state.cancel_requested():
+                await _stop_step(step_task)
+                raise _StepCancelled from None
+    finally:
+        if not step_task.done():
+            step_task.cancel()
+    return step_task.result()
+
+
 async def run_agent_task(
     db: Any, job: dict[str, Any], payload: dict[str, Any], deps: dict[str, Any]
 ) -> str:
@@ -535,25 +600,27 @@ async def run_agent_task(
         step_started = time.monotonic()
         try:
             if step["tool"] == "model":
-                outcome = await asyncio.wait_for(
-                    _run_model_step(step, task, payload, context, skill_content, deps),
-                    timeout=cfg.step_timeout_s,
+                step_coro = _run_model_step(
+                    step, task, payload, context, skill_content, deps
                 )
             elif step["tool"] == "skill":
-                outcome = await asyncio.wait_for(
-                    _run_skill_step(step, task, payload, skills_dir),
-                    timeout=cfg.step_timeout_s,
-                )
+                step_coro = _run_skill_step(step, task, payload, skills_dir)
             elif step["tool"] == "oc_bridge":
-                outcome = await asyncio.wait_for(
-                    _run_bridge_step(step, deps, cfg.step_timeout_s),
-                    timeout=cfg.step_timeout_s,
-                )
+                step_coro = _run_bridge_step(step, deps, cfg.step_timeout_s)
             else:  # conduit — the registry is closed; no other tool exists
-                outcome = await asyncio.wait_for(
-                    _run_conduit_step(step, deps),
-                    timeout=cfg.step_timeout_s,
-                )
+                step_coro = _run_conduit_step(step, deps)
+            outcome = await _await_step(
+                step_coro, state=state, timeout_s=cfg.step_timeout_s
+            )
+        except _StepCancelled:
+            record.update(
+                status="stopped",
+                error="cancelled by user",
+                finished_at=_now(),
+                duration_s=round(time.monotonic() - step_started, 3),
+            )
+            state.set(state="stopped", stop_reason="cancelled by user")
+            return "Stopped: cancelled by user"
         except TimeoutError:
             error = f"step timed out after {cfg.step_timeout_s:g}s"
             record.update(

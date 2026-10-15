@@ -329,7 +329,20 @@ class _TaskState:
         self.payload = payload
 
     def save(self) -> None:
-        self.db.update_job(self.job_id, payload_json=json.dumps(self.payload))
+        # Merge onto the fresh stored payload instead of writing
+        # the pickup snapshot back wholesale. This executor is
+        # not the only writer of the row: the cancel endpoint
+        # sets cancel_requested (and, for a queued task, state
+        # "stopped") in the stored payload while a run is in
+        # flight, and a snapshot overwrite silently erases those
+        # writes — the flag this class exists to honour. Start
+        # from what is stored now, overlay this state's keys,
+        # and adopt the merged result. Payload keys are only
+        # ever added or updated, never deleted, so overlaying
+        # cannot resurrect a key another writer removed.
+        merged = {**self.fresh_payload(), **self.payload}
+        self.db.update_job(self.job_id, payload_json=json.dumps(merged))
+        self.payload = merged
 
     def set(self, **fields: Any) -> None:
         self.payload.update(fields)
@@ -558,7 +571,12 @@ async def run_agent_task(
     if not task:
         raise ValueError("agent_task payload requires a 'task' field")
 
-    if state.cancel_requested() or payload.get("state") == "stopped":
+    # Consult the fresh stored payload, not only the snapshot
+    # passed in: a cancel — or a queued task the endpoint has
+    # already stopped — may have landed after the snapshot was
+    # taken, and the snapshot alone would resurrect it.
+    fresh = state.fresh_payload()
+    if fresh.get("cancel_requested") or fresh.get("state") == "stopped":
         state.set(state="stopped", stop_reason="cancelled by user")
         return "Stopped: cancelled by user"
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.47.3 — 2026-10-15
+- Agent loop fix: a cancel could be overwritten by the
+  executor's own progress saves. The job payload has two
+  writers — the executor and the cancel endpoint — and the
+  executor wrote the snapshot it took at pickup back
+  wholesale, so the save after planning erased a
+  `cancel_requested` flag the endpoint had just written;
+  the task then ran to completion despite the user pressing
+  stop. Executor saves now merge onto the fresh stored
+  payload (and adopt the merged result), and the executor's
+  start check reads the stored payload for both the cancel
+  flag and a pre-set `stopped` state instead of trusting
+  its snapshot. Regression tests write the flag through a
+  second writer, exactly as production does.
+
 ## 0.47.2 — 2026-10-15
 - Agent loop fix: cancel now interrupts a step while it is
   running, not only between steps. Live evidence (2026-10-15):

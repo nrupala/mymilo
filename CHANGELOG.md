@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.47.1 — 2026-10-15
+- Agent loop fix: the deterministic fallback plan now checks
+  the OpenCode bridge directly when a task clearly asks about
+  it. Live evidence (2026-10-15): the resident planner model
+  failed to emit a valid JSON plan for a bridge health task,
+  so the fallback ran — a skill step plus one model step — and
+  the most common bridge question never reached the bridge.
+  The fallback now inserts one read-only `opencode_health`
+  probe (after any skill step, before the final model step)
+  when the task text names OpenCode or the bridge, so bridge
+  health checks no longer depend on the planner succeeding.
+  Keyword matching can only ever add that health probe:
+  dispatch-class bridge actions (`oc_send_prompt`,
+  `oc_run_command`, `oc_request_deploy`, …) stay
+  model-planned only.
+
 ## 0.47.0 — 2026-10-15
 - The agent loop: Milo stops only advising and starts doing.
   `POST /v1/agent/tasks` takes a task (plus an optional session

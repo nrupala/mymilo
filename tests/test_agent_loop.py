@@ -18,7 +18,7 @@ import time
 
 import pytest
 
-from app.agent import _extract_plan, _validate_step, egress_for_route
+from app.agent import _extract_plan, _fallback_steps, _validate_step, egress_for_route
 from app.config import (
     AgentConfig,
     EmbeddingsConfig,
@@ -165,6 +165,100 @@ def test_egress_for_route_names_the_destination():
     cloud = egress_for_route(settings, "openrouter")
     assert cloud["leaves_server"] is True
     assert "openrouter.ai" in cloud["destination"]
+
+
+# ── Fallback planning ────────────────────────────────────────
+
+_HEALTH_STEP = {
+    "tool": "oc_bridge",
+    "action": "opencode_health",
+    "arguments": {},
+    "why": "Check the OpenCode bridge directly",
+}
+
+_MODEL_STEP = {
+    "tool": "model",
+    "action": "chat",
+    "arguments": {},
+    "why": "Carry out the task and produce the answer",
+}
+
+
+def test_fallback_adds_bridge_health_probe_for_bridge_tasks():
+    # The live 2026-10-15 task text: the planner model failed,
+    # so the fallback must still reach the bridge — one
+    # read-only health probe, final model step last.
+    steps = _fallback_steps(
+        "Check whether OpenCode is healthy on this server using "
+        "the bridge status tool, then answer in one sentence",
+        None,
+        None,
+    )
+    assert steps == [_HEALTH_STEP, _MODEL_STEP]
+    # When a skill step applies it stays first; the probe
+    # follows it and the model step stays last.
+    with_skill = _fallback_steps("Is the OC bridge up?", "test-skill", None)
+    assert [s["tool"] for s in with_skill] == ["skill", "oc_bridge", "model"]
+    assert with_skill[1] == _HEALTH_STEP
+
+
+def test_fallback_unchanged_for_non_bridge_tasks():
+    assert _fallback_steps("Write a haiku about servers", None, None) == [_MODEL_STEP]
+    steps = _fallback_steps("Do the test thing", "test-skill", None)
+    assert [s["tool"] for s in steps] == ["skill", "model"]
+
+
+def test_fallback_never_adds_dispatch_class_bridge_actions():
+    # Even when the task text asks for dispatch work, keyword
+    # matching may only ever add the read-only health probe —
+    # dispatch-class actions stay model-planned only.
+    steps = _fallback_steps(
+        "Use OpenCode to run a command on the server and deploy it",
+        None,
+        None,
+    )
+    bridge_steps = [s for s in steps if s["tool"] == "oc_bridge"]
+    assert bridge_steps == [_HEALTH_STEP]
+    actions = {s["action"] for s in steps}
+    assert not actions & {"oc_send_prompt", "oc_run_command", "oc_request_deploy"}
+
+
+def test_fallback_bridge_task_runs_the_health_step(tmp_path):
+    router = FakeRouter(plan_text="planner output that is not json")
+    bridge = FakeBridge()
+    settings = _settings(tmp_path)
+    db = Database(settings.db_path)
+    empty_skills = tmp_path / "no-skills"
+    empty_skills.mkdir()
+    job_id = _make_job(
+        db,
+        {
+            "task": "Check whether OpenCode is healthy on this server "
+            "using the bridge status tool, then answer in one sentence"
+        },
+    )
+    out = _run(
+        db,
+        _deps(
+            settings,
+            router,
+            skills_dir=empty_skills,
+            oc_bridge_factory=lambda: bridge,
+        ),
+        job_id,
+    )
+    assert out["status"] == "completed"
+    payload = _payload(db, job_id)
+    assert payload["plan_source"] == "deterministic"
+    assert bridge.calls == [("opencode_health", {})]
+    steps = payload["steps"]
+    assert [s["tool"] for s in steps] == ["oc_bridge", "model"]
+    assert steps[0]["action"] == "opencode_health"
+    assert steps[0]["status"] == "completed"
+    # The probe's egress is local: the bridge lives on this server.
+    assert steps[0]["egress"]["leaves_server"] is False
+    assert "oc-bridge" in steps[0]["egress"]["destination"]
+    assert payload["result"] == "agent answer"
 
 
 # ── Executor: happy paths ────────────────────────────────────

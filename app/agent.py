@@ -39,8 +39,9 @@ registry (the model proposes; the registry decides what may run —
 every proposed step is validated, unknown tools are dropped). If
 the model is unreachable or its plan does not parse, a
 deterministic fallback plan runs instead (skill step when a skill
-applies, then one model step), and the task record says which
-source planned it (``plan_source``).
+applies, a read-only bridge health probe when the task clearly
+asks about the bridge, then one model step), and the task record
+says which source planned it (``plan_source``).
 """
 
 from __future__ import annotations
@@ -174,10 +175,40 @@ def _extract_plan(text: str) -> list[dict[str, Any]] | None:
     return None
 
 
+# Substrings (matched against the lowercased task) that clearly
+# signal the task is about the OpenCode bridge itself. The
+# deterministic fallback answers them with ONE read-only probe
+# (see _fallback_steps) — the resident planner model is weak,
+# and the most common bridge ask ("is OpenCode healthy?") must
+# still reach the bridge when the model planner failed.
+_BRIDGE_INTENT_SIGNALS = (
+    "opencode",
+    "open code",
+    "oc-bridge",
+    "oc bridge",
+    "bridge health",
+    "bridge status",
+)
+
+
+def _signals_bridge_intent(task: str) -> bool:
+    text = task.lower()
+    return any(signal in text for signal in _BRIDGE_INTENT_SIGNALS)
+
+
 def _fallback_steps(
     task: str, skill_name: str | None, skills_dir: Any
 ) -> list[dict[str, Any]]:
-    """Deterministic plan: skill (when one applies) + one model step."""
+    """Deterministic plan: skill (when one applies), a read-only
+    bridge health probe (when the task clearly signals the
+    bridge), then one model step.
+
+    The probe is the ONLY bridge step keyword matching may ever
+    add: opencode_health is read-only. Dispatch-class bridge
+    actions (oc_send_prompt, oc_run_command, oc_request_deploy,
+    ...) stay model-planned only — never inferred from words in
+    the task text.
+    """
     steps: list[dict[str, Any]] = []
     name = skill_name
     if not name and skills_dir is not None:
@@ -191,6 +222,15 @@ def _fallback_steps(
                 "action": "activate",
                 "arguments": {"name": name},
                 "why": "Load the skill's instructions for this task",
+            }
+        )
+    if _signals_bridge_intent(task):
+        steps.append(
+            {
+                "tool": "oc_bridge",
+                "action": "opencode_health",
+                "arguments": {},
+                "why": "Check the OpenCode bridge directly",
             }
         )
     steps.append(

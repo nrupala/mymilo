@@ -454,11 +454,20 @@ async def _github_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _opencode_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
-    """Execute OpenCode bridge tools (v0.27.0)."""
-    from .integrations.opencode import OpenCodeBridgeClient
+    """Execute OpenCode bridge tools.
+
+    v0.47.0: reimplemented on the rewritten oc-bridge client
+    (app/integrations/opencode.py) — the bridge's real tool names
+    (oc_send_prompt, opencode_get_session, opencode_list_sessions)
+    behind the same MyMilo-side dispatch/status/sessions surface.
+    A dispatch needs a live OpenCode session on the bridge: an
+    explicit session_id wins, otherwise the first listed session
+    is used; with no session the error says so plainly.
+    """
+    from .integrations.opencode import OcBridgeClient
 
     try:
-        client = OpenCodeBridgeClient()
+        client = OcBridgeClient()
     except ValueError:
         return {
             "content": [
@@ -480,11 +489,43 @@ async def _opencode_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
                     ],
                     "isError": True,
                 }
-            result = await client.dispatch_task(
-                task=task,
-                repo=args.get("repo"),
-                context=args.get("context"),
-            )
+            prompt = task
+            if args.get("repo"):
+                prompt = f"[Repo: {args['repo']}]\n\n{prompt}"
+            if args.get("context"):
+                ctx_str = "\n".join(f"{k}: {v}" for k, v in args["context"].items())
+                prompt = f"{prompt}\n\nContext:\n{ctx_str}"
+            session_id = args.get("session_id")
+            if not session_id:
+                sessions = await client.list_sessions()
+                items = (
+                    sessions
+                    if isinstance(sessions, list)
+                    else sessions.get("sessions", [])
+                    if isinstance(sessions, dict)
+                    else []
+                )
+                for item in items:
+                    if isinstance(item, dict):
+                        session_id = item.get("id") or item.get("session_id")
+                    elif isinstance(item, str):
+                        session_id = item
+                    if session_id:
+                        break
+            if not session_id:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "No OpenCode session is available on the "
+                                "bridge — start one before dispatching."
+                            ),
+                        }
+                    ],
+                    "isError": True,
+                }
+            result = await client.send_prompt(session_id, prompt)
             return {"content": [{"type": "text", "text": str(result)}]}
 
         elif tool_name == "opencode_status":
@@ -496,7 +537,7 @@ async def _opencode_tool(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
                     ],
                     "isError": True,
                 }
-            result = await client.get_session_status(session_id)
+            result = await client.get_session(session_id)
             return {"content": [{"type": "text", "text": str(result)}]}
 
         elif tool_name == "opencode_sessions":

@@ -56,6 +56,16 @@ timeout_s = 60.0
 enabled = true
 tick_seconds = 30.0
 
+# Agent loop (v0.47.0): bounds for multi-step tasks submitted to
+# POST /v1/agent/tasks. Hard stops, not targets — hitting one ends
+# the task in an honest "stopped" state. Env overrides:
+# MYMILO_AGENT_MAX_STEPS / MYMILO_AGENT_STEP_TIMEOUT /
+# MYMILO_AGENT_TOTAL_TIMEOUT.
+[agent]
+max_steps = 8
+step_timeout_s = 300.0
+total_timeout_s = 900.0
+
 # Fleet economics (Phase 4): per-route cost metadata. Local backends stay
 # at the zero defaults. Paid routes declare USD per 1k tokens and an
 # optional monthly free quota — the ledger flags 70% and 100% via the

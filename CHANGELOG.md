@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.47.0 — 2026-10-15
+- The agent loop: Milo stops only advising and starts doing.
+  `POST /v1/agent/tasks` takes a task (plus an optional session
+  and skill), creates a job on the existing jobs engine (payload
+  type `agent_task` — no parallel store), and executes it in the
+  background: a planner turns the task into steps, and an
+  executor runs them against an allowlisted tool registry only —
+  model chat through the existing router, skill activation,
+  oc-bridge dispatch, and Conduit tools. `GET /v1/agent/tasks`
+  and `GET /v1/agent/tasks/{id}` return the caller's tasks with
+  the full step log and final result (sources included when the
+  final step produced them); `POST /v1/agent/tasks/{id}/cancel`
+  stops a task cooperatively between steps. Every step records
+  its tool, its status, its real error on failure, and its
+  egress — whether the step's data left this server and the
+  destination's name when it did (no silent egress). Bounds are
+  config (`[agent]`: max_steps 8, per-step timeout 300s, total
+  900s); hitting one ends the task in an honest `stopped` state.
+  Planning is model-proposed but registry-validated, with a
+  deterministic fallback plan (recorded as `plan_source`) when
+  the model cannot plan. Endpoints require a resolved user
+  (CF Access email or device token) and never leak one user's
+  tasks to another.
+- oc-bridge client rewritten (`app/integrations/opencode.py`):
+  the v0.27.0 client hardcoded the public Cloudflare URL, never
+  completed an MCP handshake, and called tool names the bridge
+  does not have. The new client speaks MCP streamable HTTP to
+  `OC_BRIDGE_URL` (loopback on the box) with the bridge bearer
+  token, performs the initialize handshake (session id echoed
+  when issued), unwraps JSON and SSE replies, enforces the
+  bridge's ten-tool allowlist client-side, and raises typed
+  errors (unreachable / auth / timeout / RPC) — unconfigured
+  fails closed with a clear "not configured" error, the Conduit
+  pattern. `app/mcp_server.py`'s dispatch surface is unchanged
+  for callers and now runs on the new client.
+
 ## 0.46.0 — 2026-10-12
 - Support row carries both links (owner decision 2026-10-12):
   client config now returns `support_links` — primary

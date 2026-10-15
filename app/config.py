@@ -60,6 +60,19 @@ class SchedulerConfig:
 
 
 @dataclass
+class AgentConfig:
+    # Agent loop (v0.47.0): user-submitted multi-step tasks run in
+    # the background against an allowlisted tool registry. The
+    # bounds are hard stops, not targets — hitting one ends the
+    # task in an honest "stopped" state, never a hang. Defaults
+    # leave headroom for the slow local model (a single local chat
+    # step can take ~2 minutes on the box).
+    max_steps: int = 8
+    step_timeout_s: float = 300.0
+    total_timeout_s: float = 900.0
+
+
+@dataclass
 class SkillsConfig:
     enabled: bool = True
     dir: str = "skills"
@@ -112,6 +125,7 @@ class Settings:
     request_timeout_s: float = 90.0
     embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
+    agent: AgentConfig = field(default_factory=AgentConfig)
     skills: SkillsConfig = field(default_factory=SkillsConfig)
     persona: PersonaConfig = field(default_factory=PersonaConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)
@@ -205,6 +219,24 @@ class Settings:
             not in ("0", "false", "no"),
             tick_seconds=float(
                 os.environ.get("MYMILO_SCHEDULER_TICK", sched.get("tick_seconds", 30.0))
+            ),
+        )
+
+        agent_cfg = data.get("agent", {})
+        s.agent = AgentConfig(
+            max_steps=int(
+                os.environ.get("MYMILO_AGENT_MAX_STEPS", agent_cfg.get("max_steps", 8))
+            ),
+            step_timeout_s=float(
+                os.environ.get(
+                    "MYMILO_AGENT_STEP_TIMEOUT", agent_cfg.get("step_timeout_s", 300.0)
+                )
+            ),
+            total_timeout_s=float(
+                os.environ.get(
+                    "MYMILO_AGENT_TOTAL_TIMEOUT",
+                    agent_cfg.get("total_timeout_s", 900.0),
+                )
             ),
         )
 

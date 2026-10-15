@@ -19,7 +19,13 @@ import time
 import pytest
 
 from app import agent as agent_module
-from app.agent import _extract_plan, _fallback_steps, _validate_step, egress_for_route
+from app.agent import (
+    _TaskState,
+    _extract_plan,
+    _fallback_steps,
+    _validate_step,
+    egress_for_route,
+)
 from app.config import (
     AgentConfig,
     EmbeddingsConfig,
@@ -83,6 +89,27 @@ class CancellingRouter(FakeRouter):
             updated["cancel_requested"] = True
             self._db.update_job(self._job_id, payload_json=json.dumps(updated))
             await asyncio.sleep(30)
+        return await super().chat_completion(model, payload)
+
+
+class CancelDuringPlanningRouter(FakeRouter):
+    """Sets the job's cancel flag from inside its planner
+    call — the user pressing stop while the (slow, on the
+    real box) planner is still thinking. The flag lands in
+    the row before the executor's post-planning save, the
+    exact write that used to erase it."""
+
+    def __init__(self, db: Database, job_id: str):
+        super().__init__()
+        self._db = db
+        self._job_id = job_id
+
+    async def chat_completion(self, model: str, payload: dict) -> dict:
+        system = payload["messages"][0]["content"] if payload["messages"] else ""
+        if "task planner" in system:
+            updated = dict(self._db.get_job(self._job_id)["payload"])
+            updated["cancel_requested"] = True
+            self._db.update_job(self._job_id, payload_json=json.dumps(updated))
         return await super().chat_completion(model, payload)
 
 
@@ -613,6 +640,85 @@ def test_step_error_during_cancel_watch_still_fails(tmp_path, monkeypatch):
     assert payload["state"] == "failed"
     assert payload["steps"][0]["status"] == "failed"
     assert "router exploded" in payload["steps"][0]["error"]
+
+
+# ── Executor: concurrent writers (the cancel race) ───────────
+#
+# Production has two writers of the job payload: the executor
+# and the cancel endpoint. The v0.47.2 executor saved its
+# pickup snapshot back wholesale, so any progress save erased
+# a cancel the endpoint had written in the meantime — cancel
+# worked in single-writer tests and failed live. These tests
+# always write the flag through a SECOND writer (a direct db
+# write, exactly the endpoint's shape), never through the
+# executor's own payload.
+
+
+def test_task_state_save_never_erases_a_second_writers_cancel(tmp_path):
+    settings = _settings(tmp_path)
+    db = Database(settings.db_path)
+    job_id = _make_job(db, {"task": "Anything"})
+    state = _TaskState(db, job_id, dict(_payload(db, job_id)))
+    state.set(plan_source="model")
+    # Second writer — the cancel endpoint's exact write shape.
+    updated = dict(_payload(db, job_id))
+    updated["cancel_requested"] = True
+    db.update_job(job_id, payload_json=json.dumps(updated))
+    # The executor's next progress save must keep the flag —
+    # and its own write must still land alongside it.
+    state.set(plan_clamped=False)
+    stored = _payload(db, job_id)
+    assert stored["cancel_requested"] is True
+    assert stored["plan_clamped"] is False
+    assert stored["plan_source"] == "model"
+    assert state.cancel_requested() is True
+
+
+def test_cancel_written_during_planning_stops_the_task(tmp_path):
+    settings = _settings(tmp_path)
+    db = Database(settings.db_path)
+    job_id = _make_job(db, {"task": "Long task"})
+    router = CancelDuringPlanningRouter(db, job_id)
+    empty_skills = tmp_path / "no-skills"
+    empty_skills.mkdir()
+    out = _run(db, _deps(settings, router, skills_dir=empty_skills), job_id)
+    assert out["summary"] == "Stopped: cancelled by user"
+    payload = _payload(db, job_id)
+    assert payload["state"] == "stopped"
+    assert payload["stop_reason"] == "cancelled by user"
+    assert payload["cancel_requested"] is True
+    assert payload["steps"] == []  # stopped before the first step
+
+
+def test_pre_stopped_row_wins_over_a_stale_snapshot(tmp_path):
+    # The endpoint stopped this queued task (flag + state in
+    # the row) after the engine had already taken its payload
+    # snapshot. The executor must trust the row, not the stale
+    # snapshot it was handed, and must not run anything.
+    settings = _settings(tmp_path)
+    db = Database(settings.db_path)
+    job_id = _make_job(db, {"task": "Anything"})
+    job_row = db.get_job(job_id)
+    stale_payload = dict(job_row["payload"])
+    assert stale_payload.get("state") != "stopped"
+    assert "cancel_requested" not in stale_payload
+    # Second writer — the cancel endpoint on a queued task.
+    updated = dict(stale_payload)
+    updated["cancel_requested"] = True
+    updated["state"] = "stopped"
+    updated["stop_reason"] = "cancelled by user"
+    db.update_job(job_id, payload_json=json.dumps(updated))
+
+    router = FakeRouter()
+    summary = asyncio.run(
+        agent_module.run_agent_task(db, job_row, stale_payload, _deps(settings, router))
+    )
+    assert summary == "Stopped: cancelled by user"
+    assert router.calls == []  # not even the planner ran
+    stored = _payload(db, job_id)
+    assert stored["state"] == "stopped"
+    assert stored["stop_reason"] == "cancelled by user"
+    assert stored["cancel_requested"] is True
 
 
 # ── HTTP surface ─────────────────────────────────────────────

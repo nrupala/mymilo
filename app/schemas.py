@@ -38,6 +38,16 @@ class JobCreate(BaseModel):
     payload: dict = Field(default_factory=dict)
 
 
+class AgentTaskCreate(BaseModel):
+    """v0.47.0: submit a multi-step task to the agent loop."""
+
+    task: str = Field(min_length=1, max_length=8000)
+    session_id: str | None = None
+    # Deliberate skill invocation, same rule as chat (v0.41.0):
+    # when set, the skill is force-activated as the first step.
+    skill: str | None = None
+
+
 class JobUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     cron: str | None = None

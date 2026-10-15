@@ -34,7 +34,7 @@ from . import cron as cron_mod
 from .rag import build_rag_messages, verify_citations
 from .skills import match_skill, scan_skills
 
-JOB_TYPES = ("briefing", "reminder", "background_task")
+JOB_TYPES = ("briefing", "reminder", "background_task", "agent_task")
 
 
 class JobDefinitionError(ValueError):
@@ -55,6 +55,8 @@ def validate_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
         )
     if job_type == "reminder" and not payload.get("text"):
         raise JobDefinitionError("reminder jobs require a 'text' field")
+    if job_type == "agent_task" and not payload.get("task"):
+        raise JobDefinitionError("agent_task jobs require a 'task' field")
     if job_type == "briefing":
         payload.setdefault("query", "recent documents")
         payload.setdefault("top_k", 5)
@@ -119,6 +121,8 @@ def make_job_executor(deps: dict[str, Any]):
                 summary = _run_reminder(payload)
             elif job_type == "background_task":
                 summary = await _run_background_task(db, job, payload, deps)
+            elif job_type == "agent_task":
+                summary = await _run_agent_task(db, job, payload, deps)
             else:
                 raise ValueError(f"unknown job type {job_type!r}")
             db.finish_run(run_id, "completed", result_summary=summary)
@@ -209,6 +213,24 @@ async def _run_briefing(
     if not check["ok"]:
         answer += " (citation check flagged unresolved references)"
     return answer
+
+
+async def _run_agent_task(
+    db: Any,
+    job: dict[str, Any],
+    payload: dict[str, Any],
+    deps: dict[str, Any],
+) -> str:
+    """Dispatch to the agent loop (app/agent.py).
+
+    Imported here rather than at module top: agent.py reads the
+    skills registry and both integration clients, and keeping the
+    import at the dispatch point leaves scheduler importable in
+    isolation (its payload validation is used by app/jobs.py).
+    """
+    from .agent import run_agent_task
+
+    return await run_agent_task(db, job, payload, deps)
 
 
 async def _run_background_task(

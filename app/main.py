@@ -71,6 +71,7 @@ from .scheduler import (
 )
 from .schemas import (
     ActionInfo,
+    AgentTaskCreate,
     ChatCompletionRequest,
     ChunkHit,
     ConsentGrant,
@@ -174,6 +175,9 @@ def create_app(
         "docs": docs,
         "router": router,
         "bus": bus,
+        # v0.47.0: the agent loop lands finished tasks in the
+        # caller's chat session (owner-checked in app/agent.py).
+        "memory": memory,
     }
     actions.register(
         "job.execute",
@@ -1349,6 +1353,109 @@ def create_app(
         jobs.get(job_id)  # 404 if unknown
         return {"runs": [JobRun(**r).model_dump() for r in db.list_runs(job_id)]}
 
+    # ── v0.47.0: agent tasks ────────────────────────────────
+    # Multi-step tasks executed by the agent loop (app/agent.py)
+    # on the jobs engine. These endpoints DO things on the
+    # caller's behalf, so — like the skills bundle — they require
+    # a resolved user on every host (CF Access email or device
+    # token); the API-host guard 401s earlier still applies.
+
+    def _agent_task_view(row: dict) -> dict:
+        p = row["payload"]
+        return {
+            "id": row["id"],
+            "task": p.get("task", ""),
+            "status": p.get("state", "queued"),
+            "session_id": p.get("session_id"),
+            "skill": p.get("skill"),
+            "plan_source": p.get("plan_source"),
+            "steps": p.get("steps", []),
+            "result": p.get("result"),
+            "sources": p.get("sources", []),
+            "error": p.get("error"),
+            "stop_reason": p.get("stop_reason"),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def _owned_agent_row(task_id: str, user: str) -> dict:
+        row = db.get_job(task_id)
+        if (
+            row is None
+            or row["payload"].get("type") != "agent_task"
+            or row["payload"].get("owner") != user
+        ):
+            # Another user's task is indistinguishable from a
+            # missing one — existence is not leaked across users.
+            raise HTTPException(status_code=404, detail="Agent task not found")
+        return row
+
+    @app.post("/v1/agent/tasks", status_code=201)
+    async def create_agent_task(data: AgentTaskCreate, request: Request):
+        user = _resolve_user(request)
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        job = jobs.create(
+            JobCreate(
+                name=f"Agent: {data.task[:60]}",
+                payload={
+                    "type": "agent_task",
+                    "task": data.task,
+                    "session_id": data.session_id,
+                    "skill": data.skill,
+                    "owner": user,
+                    "state": "queued",
+                    "steps": [],
+                },
+            )
+        )
+        asyncio.create_task(run_job_now(app, job.id, triggered_by="agent-api"))
+        return _agent_task_view(db.get_job(job.id) or {})
+
+    @app.get("/v1/agent/tasks")
+    async def list_agent_tasks(request: Request, limit: int = 20):
+        user = _resolve_user(request)
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        limit = max(1, min(limit, 100))
+        rows = [
+            r
+            for r in db.list_jobs()
+            if r["payload"].get("type") == "agent_task"
+            and r["payload"].get("owner") == user
+        ]
+        return {"tasks": [_agent_task_view(r) for r in rows[:limit]]}
+
+    @app.get("/v1/agent/tasks/{task_id}")
+    async def get_agent_task(task_id: str, request: Request):
+        user = _resolve_user(request)
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        return _agent_task_view(_owned_agent_row(task_id, user))
+
+    @app.post("/v1/agent/tasks/{task_id}/cancel")
+    async def cancel_agent_task(task_id: str, request: Request):
+        user = _resolve_user(request)
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        row = _owned_agent_row(task_id, user)
+        payload = dict(row["payload"])
+        state = payload.get("state", "queued")
+        if state in ("completed", "failed", "stopped"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Task is already {state} and cannot be cancelled",
+            )
+        # Cooperative cancel: the executor checks this flag in the
+        # job row before every step and stops honestly. A task that
+        # has not started yet is stopped here directly.
+        payload["cancel_requested"] = True
+        if state == "queued":
+            payload["state"] = "stopped"
+            payload["stop_reason"] = "cancelled by user"
+        db.update_job(task_id, payload_json=json.dumps(payload))
+        return _agent_task_view(db.get_job(task_id) or {})
+
     @app.get("/v1/suggestions")
     async def list_suggestions():
         return {
@@ -1577,6 +1684,7 @@ def create_app(
             "openai_compatible": ["/v1/chat/completions", "/v1/models"],
             "retrieval": ["/v1/documents", "/v1/retrieve"],
             "routines": ["/v1/jobs", "/v1/suggestions", "/v1/actions"],
+            "agent": ["/v1/agent/tasks"],
             "economics": ["/v1/ledger", "/v1/routes", "/v1/engine/rollup"],
             "platform": [
                 "/v1/skills",
@@ -1609,6 +1717,12 @@ agentic OS. Version {__version__}.
 - Routines (cron jobs): GET/POST /v1/jobs, POST /v1/jobs/{{id}}/trigger,
   GET /v1/jobs/{{id}}/runs. Payload types: briefing {{query, top_k, model}}
   and reminder {{text}}.
+- Agent tasks (v0.47.0): POST /v1/agent/tasks {{task, session_id?, skill?}}
+  runs a multi-step task in the background against an allowlisted tool
+  registry (model chat, skills, oc-bridge, Conduit); GET /v1/agent/tasks
+  and GET /v1/agent/tasks/{{id}} return status, the step log (each step
+  names its egress), and the result; POST /v1/agent/tasks/{{id}}/cancel
+  stops one. Requires authentication (CF Access email or device token).
 - Planner outbox: GET /v1/suggestions, POST /v1/suggestions/{{id}}/dismiss
 - Actions & consent: GET /v1/actions, POST /v1/consents, DELETE /v1/consents/{{action}}
 - Economics: GET /v1/ledger/summary, GET /v1/routes (cheapest-first ranking)

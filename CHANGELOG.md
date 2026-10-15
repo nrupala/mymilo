@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.47.2 — 2026-10-15
+- Agent loop fix: cancel now interrupts a step while it is
+  running, not only between steps. Live evidence (2026-10-15):
+  a task cancelled during its single long model step ran to
+  completion anyway, because cancellation was only checked at
+  step boundaries and the per-step timeout is 300s — "stop"
+  could mean "stops within five minutes." The executor now
+  watches the job's cancel flag while a step runs (polled
+  every ~2s) and cancels the in-flight step promptly; the
+  step is recorded `stopped` with reason "cancelled by user"
+  and the task ends `stopped`, never `failed`. Genuine step
+  errors and real step timeouts behave exactly as before.
+
 ## 0.47.1 — 2026-10-15
 - Agent loop fix: the deterministic fallback plan now checks
   the OpenCode bridge directly when a task clearly asks about

@@ -18,6 +18,7 @@ import time
 
 import pytest
 
+from app import agent as agent_module
 from app.agent import _extract_plan, _fallback_steps, _validate_step, egress_for_route
 from app.config import (
     AgentConfig,
@@ -62,6 +63,38 @@ class SlowRouter(FakeRouter):
         system = payload["messages"][0]["content"] if payload["messages"] else ""
         if "task planner" not in system:
             await asyncio.sleep(30)
+        return await super().chat_completion(model, payload)
+
+
+class CancellingRouter(FakeRouter):
+    """Sets the job's cancel flag from inside its execution
+    call, then hangs — the user pressing stop while a long
+    step is already running."""
+
+    def __init__(self, db: Database, job_id: str):
+        super().__init__()
+        self._db = db
+        self._job_id = job_id
+
+    async def chat_completion(self, model: str, payload: dict) -> dict:
+        system = payload["messages"][0]["content"] if payload["messages"] else ""
+        if "task planner" not in system:
+            updated = dict(self._db.get_job(self._job_id)["payload"])
+            updated["cancel_requested"] = True
+            self._db.update_job(self._job_id, payload_json=json.dumps(updated))
+            await asyncio.sleep(30)
+        return await super().chat_completion(model, payload)
+
+
+class ExplodingRouter(FakeRouter):
+    """Execution calls fail with a genuine error shortly after
+    starting, while the cancel watcher is polling."""
+
+    async def chat_completion(self, model: str, payload: dict) -> dict:
+        system = payload["messages"][0]["content"] if payload["messages"] else ""
+        if "task planner" not in system:
+            await asyncio.sleep(0.05)
+            raise RuntimeError("router exploded")
         return await super().chat_completion(model, payload)
 
 
@@ -518,6 +551,68 @@ def test_cancel_requested_before_start_stops_cleanly(tmp_path):
     assert payload["state"] == "stopped"
     assert payload["steps"] == []
     assert router.calls == []  # not even the planner ran
+
+
+# ── Executor: cancel while a step runs ───────────────────────
+
+
+def test_cancel_during_a_step_stops_it_promptly(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent_module, "CANCEL_POLL_INTERVAL_S", 0.02)
+    settings = _settings(tmp_path, step_timeout_s=30.0)
+    db = Database(settings.db_path)
+    job_id = _make_job(db, {"task": "Long task"})
+    router = CancellingRouter(db, job_id)
+    empty_skills = tmp_path / "no-skills"
+    empty_skills.mkdir()
+    started = time.monotonic()
+    out = _run(db, _deps(settings, router, skills_dir=empty_skills), job_id)
+    elapsed = time.monotonic() - started
+    # The step hangs for 30s and the step timeout is 30s; the
+    # cancel flag interrupts it within a poll interval instead.
+    assert elapsed < 5
+    assert out["summary"] == "Stopped: cancelled by user"
+    payload = _payload(db, job_id)
+    assert payload["state"] == "stopped"
+    assert payload["stop_reason"] == "cancelled by user"
+    assert payload["steps"][0]["status"] == "stopped"
+    assert payload["steps"][0]["error"] == "cancelled by user"
+
+
+def test_hanging_step_without_cancel_still_times_out(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent_module, "CANCEL_POLL_INTERVAL_S", 0.02)
+    router = SlowRouter()
+    settings = _settings(tmp_path, step_timeout_s=0.3)
+    db = Database(settings.db_path)
+    job_id = _make_job(db, {"task": "Slow task"})
+    empty_skills = tmp_path / "no-skills"
+    empty_skills.mkdir()
+    started = time.monotonic()
+    with pytest.raises(Exception, match="timed out"):
+        _run(db, _deps(settings, router, skills_dir=empty_skills), job_id)
+    elapsed = time.monotonic() - started
+    # The watcher must not turn a real timeout into a stop: the
+    # step ran to its own deadline, not to a poll tick.
+    assert elapsed >= 0.25
+    payload = _payload(db, job_id)
+    assert payload["state"] == "failed"
+    assert payload["steps"][0]["status"] == "failed"
+    assert "timed out" in payload["steps"][0]["error"]
+
+
+def test_step_error_during_cancel_watch_still_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent_module, "CANCEL_POLL_INTERVAL_S", 0.02)
+    router = ExplodingRouter()
+    settings = _settings(tmp_path, step_timeout_s=30.0)
+    db = Database(settings.db_path)
+    job_id = _make_job(db, {"task": "Exploding task"})
+    empty_skills = tmp_path / "no-skills"
+    empty_skills.mkdir()
+    with pytest.raises(Exception, match="router exploded"):
+        _run(db, _deps(settings, router, skills_dir=empty_skills), job_id)
+    payload = _payload(db, job_id)
+    assert payload["state"] == "failed"
+    assert payload["steps"][0]["status"] == "failed"
+    assert "router exploded" in payload["steps"][0]["error"]
 
 
 # ── HTTP surface ─────────────────────────────────────────────

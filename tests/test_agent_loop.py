@@ -20,9 +20,9 @@ import pytest
 
 from app import agent as agent_module
 from app.agent import (
-    _TaskState,
     _extract_plan,
     _fallback_steps,
+    _TaskState,
     _validate_step,
     egress_for_route,
 )

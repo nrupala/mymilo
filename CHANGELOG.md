@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.48.0 — 2026-10-15
+- Whisper voice input: the chat composer's mic now records
+  audio and posts it to the new `POST /v1/transcribe` route,
+  which forwards it to the household Whisper engine — the
+  self-hosted faster-whisper service configured in the new
+  `[whisper]` config section (`MYMILO_WHISPER_URL` /
+  `MYMILO_WHISPER_TOKEN` env). The transcript lands in the
+  composer, editable before send; typing is always available.
+  This replaces the browser's built-in speech recognition,
+  which sent voice to a third party: there is no fallback
+  recognizer — an unconfigured engine answers 503 and an
+  unreachable one 502, both with a plain "type instead"
+  message in the UI. `GET /v1/client/config` now reports
+  `features.whisper` so native clients only offer the mic
+  when a household engine is actually configured. Milo shares
+  the household engine (laptop / Aetheris service); it embeds
+  no recognizer of its own.
+
 ## 0.47.3 — 2026-10-15
 - Agent loop fix: a cancel could be overwritten by the
   executor's own progress saves. The job payload has two

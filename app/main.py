@@ -25,6 +25,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import (
@@ -103,6 +104,8 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+# Dictation clips are short by design; 25 MB is minutes of audio.
+MAX_TRANSCRIBE_BYTES = 25 * 1024 * 1024
 
 
 def build_embedder(settings: Settings, transport=None):
@@ -640,7 +643,87 @@ def create_app(
                 "streaming": False,
                 "offline_queue": True,
                 "local_skills": True,
+                # v0.48.0: voice input via the household Whisper
+                # engine (POST /v1/transcribe). True only when an
+                # engine is configured — clients must not offer a
+                # mic that silently does something else.
+                "whisper": bool(settings.whisper.base_url),
             },
+        }
+
+    # ── v0.48.0: Whisper voice input ───────────────────────────
+    # The chat surface's mic records audio and posts it here; this
+    # route forwards it to the household Whisper engine
+    # (self-hosted faster-whisper — [whisper] in the config) and
+    # returns the transcript for the composer, where it stays
+    # editable before send. Milo never embeds a recognizer and
+    # NEVER falls back to the browser's built-in speech
+    # recognition: an unconfigured or unreachable engine is a
+    # loud, plain failure, and typing always remains.
+    @app.post("/v1/transcribe")
+    async def transcribe(
+        file: UploadFile = File(...),  # noqa: B008 — FastAPI's required idiom
+    ):
+        cfg = settings.whisper
+        if not cfg.base_url:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Voice input is off: no Whisper engine is "
+                    "configured on this server."
+                ),
+            )
+        audio = await file.read()
+        if not audio:
+            raise HTTPException(status_code=400, detail="No audio received.")
+        if len(audio) > MAX_TRANSCRIBE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="That recording is too long — try a shorter one.",
+            )
+        headers = {}
+        token = settings.whisper_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        files = {
+            "file": (
+                file.filename or "dictation.webm",
+                audio,
+                file.content_type or "audio/webm",
+            )
+        }
+        try:
+            async with httpx.AsyncClient(
+                transport=transport, trust_env=False, timeout=cfg.timeout_s
+            ) as client:
+                resp = await client.post(
+                    f"{cfg.base_url}/transcribe", files=files, headers=headers
+                )
+        except httpx.HTTPError:
+            raise HTTPException(
+                status_code=502,
+                detail="Whisper engine unreachable — type your message instead.",
+            ) from None
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail="Whisper engine error — type your message instead.",
+            )
+        try:
+            payload = resp.json()
+        except ValueError:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Whisper engine sent an unreadable reply — "
+                    "type your message instead."
+                ),
+            ) from None
+        return {
+            "text": (payload.get("text") or "").strip(),
+            "language": payload.get("language"),
+            "duration": payload.get("duration"),
+            "segments": payload.get("segments") or [],
         }
 
     # ── v0.33.0: skills bundle (dual-homed skills) ──────────────

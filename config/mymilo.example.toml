@@ -119,3 +119,18 @@ poll_seconds = 300.0
 # api_key_env = "MYMILO_OPENROUTER_API_KEY"
 # timeout_s = 120.0
 # # Rates vary by model; set your chosen model's rates here.
+
+# ── Whisper voice input (v0.48.0) ──────────────────────────────
+# The household Whisper engine: a self-hosted faster-whisper
+# service (POST {base_url}/transcribe, multipart audio file ->
+# {"text": ...}). Milo shares the household engine — it embeds
+# no recognizer and never falls back to a browser/third-party
+# recognizer. Leave base_url empty to turn voice input off; the
+# /v1/transcribe route then answers 503 and says so plainly.
+# The bearer token NEVER goes in this file: it is read from the
+# environment variable named by token_env (or a vault file of
+# the same name) at request time.
+[whisper]
+# base_url = "http://LAPTOP-HTA1H418:8766"
+token_env = "MYMILO_WHISPER_TOKEN"
+timeout_s = 180.0

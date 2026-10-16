@@ -64,4 +64,11 @@ def test_signout_and_voice_ui_present(client):
     html = r.text
     assert 'href="/cdn-cgi/access/logout"' in html  # sign out via Access
     assert 'id="mic"' in html  # voice dictation button
-    assert "webkitSpeechRecognition" in html
+    # v0.48.0: dictation is the household Whisper engine — the mic
+    # records via MediaRecorder and posts to /v1/transcribe. The
+    # browser's built-in recognizer (which sends voice to a third
+    # party) must NOT be present anywhere in the page.
+    assert "MediaRecorder" in html
+    assert "/v1/transcribe" in html
+    assert "webkitSpeechRecognition" not in html
+    assert "SpeechRecognition" not in html

@@ -77,64 +77,97 @@ function addMsg(role, text) {
 }
 
 const micBtn = document.getElementById('mic');
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SpeechRec) {
-  micBtn.style.display = 'none'; // no voice input on this browser
-} else {
-  // iOS Safari hardening: fresh instance per tap, continuous + auto-restart,
-  // user-visible errors. Reusing one instance is flaky on iPhone.
-  let rec = null;
-  let wantRec = false;
-  let baseText = '';
-  const stopUi = () => {
-    wantRec = false;
-    micBtn.classList.remove('rec');
-    micBtn.textContent = '🎙';
-  };
-  const startRec = () => {
-    rec = new SpeechRec();
-    rec.lang = 'en-US';
-    rec.interimResults = true;
-    rec.continuous = true; // iOS stops after pauses unless continuous
-    rec.onresult = (event) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) baseText += transcript + ' ';
-        else interim += transcript;
-      }
-      input.value = (baseText + interim).trim();
-    };
-    rec.onend = () => {
-      // iOS fires onend spontaneously — restart if user still wants it.
-      if (wantRec) { try { rec.start(); } catch (e) { stopUi(); } }
-      else stopUi();
-    };
-    rec.onerror = (event) => {
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        input.placeholder = 'Mic blocked — allow microphone in Settings';
-      }
-      stopUi();
-    };
-    try { rec.start(); }
-    catch (e) { stopUi(); }
-  };
-  micBtn.addEventListener('click', () => {
-    if (wantRec) { wantRec = false; if (rec) rec.stop(); return; }
-    // Fresh dictation = fresh input. Clear any leftover text.
-    input.value = '';
-    baseText = '';
-    wantRec = true;
-    micBtn.classList.add('rec');
-    micBtn.textContent = '⏹';
-    startRec();
-  });
-  // Stop dictation and reset when the message is sent.
-  form.addEventListener('submit', () => {
-    if (wantRec) { wantRec = false; if (rec) try { rec.stop(); } catch (e) {} }
-    baseText = '';
-  });
+// Voice input = the household Whisper engine, nothing else.
+// The mic records audio (MediaRecorder) and posts it to
+// /v1/transcribe; the server forwards it to the self-hosted
+// Whisper service and the transcript lands here, editable,
+// never auto-sent. There is deliberately NO fallback to the
+// browser's built-in speech recognition (which sends voice to
+// a third party): if the engine is off or unreachable, the
+// failure is stated plainly and typing remains.
+let mediaRec = null;
+let recChunks = [];
+let recStream = null;
+let recording = false;
+
+function micNote(msg) {
+  const old = input.placeholder;
+  input.placeholder = msg;
+  setTimeout(() => { input.placeholder = old; }, 5000);
 }
+function stopMicUi() {
+  recording = false;
+  micBtn.classList.remove('rec');
+  micBtn.textContent = '🎙';
+}
+function releaseStream() {
+  if (recStream) { recStream.getTracks().forEach(t => t.stop()); recStream = null; }
+}
+async function stopRecording(sendIt) {
+  if (!mediaRec) { stopMicUi(); releaseStream(); return; }
+  const rec = mediaRec;
+  mediaRec = null;
+  await new Promise(res => { rec.onstop = res; try { rec.stop(); } catch (e) { res(); } });
+  releaseStream();
+  stopMicUi();
+  const chunks = recChunks;
+  recChunks = [];
+  if (!sendIt || !chunks.length) return;
+  const blob = new Blob(chunks, {type: rec.mimeType || 'audio/webm'});
+  const fd = new FormData();
+  fd.append('file', blob, 'dictation.webm');
+  micBtn.textContent = '…';
+  try {
+    const r = await fetch('/v1/transcribe', {method: 'POST', body: fd});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      micNote(j.detail || 'Voice input failed — type instead.');
+      return;
+    }
+    const text = (j.text || '').trim();
+    if (text) {
+      const cur = input.value.replace(/\s+$/, '');
+      input.value = (cur ? cur + ' ' : '') + text;
+      input.focus();
+    } else {
+      micNote("Didn't catch any words — try again, or type.");
+    }
+  } catch (e) {
+    micNote('Whisper engine unreachable — type instead.');
+  } finally {
+    micBtn.textContent = '🎙';
+  }
+}
+micBtn.addEventListener('click', async () => {
+  if (recording) { stopRecording(true); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    micNote('Voice input is not available in this browser — type instead.');
+    return;
+  }
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({audio: true});
+  } catch (e) {
+    micNote('Mic blocked — allow microphone access, or type instead.');
+    return;
+  }
+  recChunks = [];
+  try {
+    mediaRec = new MediaRecorder(recStream);
+  } catch (e) {
+    releaseStream();
+    micNote('Voice recording is not available here — type instead.');
+    return;
+  }
+  mediaRec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+  mediaRec.start();
+  recording = true;
+  micBtn.classList.add('rec');
+  micBtn.textContent = '⏹';
+});
+// Sending while recording discards the in-flight recording.
+form.addEventListener('submit', () => {
+  if (mediaRec) stopRecording(false);
+});
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -117,6 +117,23 @@ class OSConfig:
 
 
 @dataclass
+class WhisperConfig:
+    # Household Whisper engine (v0.48.0): the self-hosted
+    # faster-whisper service — POST {base_url}/transcribe with a
+    # multipart audio file returns {"text": ...}. Milo SHARES the
+    # household engine (the laptop / Aetheris service); it never
+    # embeds its own recognizer and never falls back to a browser
+    # or third-party recognizer. Empty base_url = voice input off,
+    # and the transcribe route says so plainly (503), never silent.
+    # The bearer token is a secret: only the NAME of its env var is
+    # configured here; the value is read at request time and never
+    # stored in config or logged.
+    base_url: str = ""
+    token_env: str | None = "MYMILO_WHISPER_TOKEN"
+    timeout_s: float = 180.0
+
+
+@dataclass
 class Settings:
     host: str = "127.0.0.1"
     port: int = 8090
@@ -130,6 +147,7 @@ class Settings:
     persona: PersonaConfig = field(default_factory=PersonaConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)
     os: OSConfig = field(default_factory=OSConfig)
+    whisper: WhisperConfig = field(default_factory=WhisperConfig)
     default_model: str = "local"
     mcp_service_tokens: list[str] = field(default_factory=list)
 
@@ -265,6 +283,19 @@ class Settings:
             path=os.environ.get("MYMILO_VAULT_PATH", vault_cfg.get("path"))
         )
 
+        whisper_cfg = data.get("whisper", {})
+        s.whisper = WhisperConfig(
+            base_url=os.environ.get(
+                "MYMILO_WHISPER_URL", whisper_cfg.get("base_url", "")
+            ).rstrip("/"),
+            token_env=whisper_cfg.get("token_env", "MYMILO_WHISPER_TOKEN"),
+            timeout_s=float(
+                os.environ.get(
+                    "MYMILO_WHISPER_TIMEOUT", whisper_cfg.get("timeout_s", 180.0)
+                )
+            ),
+        )
+
         os_cfg = data.get("os", {})
 
         def _os_int(key: str, env_key: str) -> int | None:
@@ -302,6 +333,28 @@ class Settings:
 
     def route_for(self, name: str) -> ModelRoute | None:
         return next((m for m in self.models if m.name == name), None)
+
+    def whisper_token(self) -> str | None:
+        """Bearer token for the household Whisper engine, resolved
+        like a route API key: env var named by ``whisper.token_env``
+        first, vault file of the same name as fallback. The value is
+        never stored on Settings and never logged."""
+        env = self.whisper.token_env
+        if not env:
+            return None
+        value = os.environ.get(env)
+        if value:
+            return value
+        if self.vault.path:
+            from pathlib import Path
+
+            candidate = Path(self.vault.path) / env
+            try:
+                if candidate.is_file():
+                    return candidate.read_text().strip() or None
+            except OSError:
+                pass
+        return None
 
     def api_key_for(self, route: ModelRoute) -> str | None:
         if route.api_key_env:
